@@ -1,312 +1,496 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>台灣人生財務模擬器 v7.4.1 (圓餅圖修正版)</title>
-    
+
+    <!-- 引入 React 18 核心函式庫 -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <!-- 引入 ReactDOM 用於渲染 React 組件到 DOM -->
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- 引入 Babel 用於在瀏覽器中編譯 JSX 語法 -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- 引入 Tailwind CSS 用於快速樣式設計 -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Chart.js 用於繪製圖表 -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- 引入 Phosphor Icons 圖標庫 -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- 引入 Marked.js 用於解析 Markdown 格式 -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
     <style>
-        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-        input[type=number] { -moz-appearance: textfield; }
-        .chart-container { position: relative; width: 100%; height: 100%; }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        .prose h3 { font-size: 1.1em; font-weight: bold; margin-bottom: 0.5em; color: #1e293b; }
-        .prose ul { list-style-type: disc; padding-left: 1.2em; margin-bottom: 0.5em; }
-        .prose li { margin-bottom: 0.2em; }
-        .prose strong { color: #2563eb; }
-        .prose p { margin-bottom: 0.8em; }
-        @keyframes sparkle {
-            0% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.6; transform: scale(0.95); }
-            100% { opacity: 1; transform: scale(1); }
+        /* 隱藏數字輸入框的上下箭頭按鈕 (Webkit 瀏覽器) */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            appearance: none;
+            /* 標準屬性，提升相容性 */
+            margin: 0;
         }
-        .ai-pulse { animation: sparkle 2s infinite ease-in-out; }
+
+        /* 隱藏數字輸入框的上下箭頭按鈕 (Firefox) */
+        input[type=number] {
+            -moz-appearance: textfield;
+            appearance: textfield;
+            /* 標準屬性，提升相容性 */
+        }
+
+        /* 圖表容器樣式 */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 自訂捲軸寬度 */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        /* 自訂捲軸軌道背景色 */
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+
+        /* 自訂捲軸滑塊樣式 */
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+
+        /* 自訂捲軸滑塊懸停效果 */
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* AI 回應內容的標題樣式 */
+        .prose h3 {
+            font-size: 1.1em;
+            font-weight: bold;
+            margin-bottom: 0.5em;
+            color: #1e293b;
+        }
+
+        /* AI 回應內容的列表樣式 */
+        .prose ul {
+            list-style-type: disc;
+            padding-left: 1.2em;
+            margin-bottom: 0.5em;
+        }
+
+        /* AI 回應內容的列表項目樣式 */
+        .prose li {
+            margin-bottom: 0.2em;
+        }
+
+        /* AI 回應內容的粗體文字顏色 */
+        .prose strong {
+            color: #2563eb;
+        }
+
+        /* AI 回應內容的段落樣式 */
+        .prose p {
+            margin-bottom: 0.8em;
+        }
+
+        /* AI 按鈕閃爍動畫效果 */
+        @keyframes sparkle {
+            0% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.6;
+                transform: scale(0.95);
+            }
+
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        /* 應用閃爍動畫到 AI 相關元素 */
+        .ai-pulse {
+            animation: sparkle 2s infinite ease-in-out;
+        }
     </style>
 </head>
+
 <body class="bg-slate-50 text-slate-800 font-sans selection:bg-blue-100">
 
-<div id="root"></div>
+    <div id="root"></div>
 
-<script type="text/babel">
-    const { useState, useEffect, useRef, useMemo } = React;
+    <script type="text/babel">
+        // 從 React 中解構出常用的 Hooks
+        const { useState, useEffect, useRef, useMemo } = React;
 
-    const apiKey = ""; 
+        // Gemini AI API 金鑰（需要用戶自行填入）
+        const apiKey = "";
 
-    const callGeminiAPI = async (prompt) => {
-        try {
-            const maxRetries = 3;
-            let attempt = 0;
-            while (attempt < maxRetries) {
-                try {
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-                    });
-                    if (!response.ok) throw new Error(`API Error: ${response.status}`);
-                    const data = await response.json();
-                    return data.candidates?.[0]?.content?.parts?.[0]?.text || "AI 暫時無法回應，請稍後再試。";
-                } catch (err) {
-                    attempt++;
-                    if (attempt === maxRetries) throw err;
-                    await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
-                }
-            }
-        } catch (error) {
-            console.error("Gemini API Failed:", error);
-            return "連線發生錯誤，請檢查網路或 API Key。";
-        }
-    };
-
-    const calculateLoan = (priceWan, downPaymentPercent, years, ratePercent) => {
-        const totalLoan = priceWan * 10000 * (1 - downPaymentPercent / 100);
-        const monthlyRate = (ratePercent / 100) / 12;
-        const months = years * 12;
-        let monthlyPayment = 0;
-        if (monthlyRate > 0) {
-            monthlyPayment = (totalLoan * monthlyRate * Math.pow(1 + monthlyRate, months)) / (Math.pow(1 + monthlyRate, months) - 1);
-        } else {
-            monthlyPayment = totalLoan / months;
-        }
-        return { monthly: Math.round(monthlyPayment), daily: Math.round(monthlyPayment / 30), totalLoan };
-    };
-
-    const coreSimulation = (data) => {
-        const { params, properties, cars, childrenList, passiveIncomes, customExpenses } = data;
-        let age = params.currentAge;
-        let nominalAssets = params.currentAssets * 10000;
-        let currentMonthlyWage = params.monthlyIncome * 10000;
-        
-        // --- 修正開始：強制轉型為 Number 以確保運算邏輯正確 ---
-        const propertyPlans = properties.map(p => {
-            const safeP = {
-                ...p,
-                buyAge: Number(p.buyAge),
-                price: Number(p.price),
-                downPayment: Number(p.downPayment),
-                loanTerm: Number(p.loanTerm),
-                rate: Number(p.rate)
-            };
-            return {
-                ...safeP,
-                ...calculateLoan(safeP.price, safeP.downPayment, safeP.loanTerm, safeP.rate),
-                remainingMonths: safeP.loanTerm * 12
-            };
-        });
-
-        const carPlans = cars.map(c => {
-            const safeC = {
-                ...c,
-                buyAge: Number(c.buyAge),
-                price: Number(c.price),
-                downPayment: Number(c.downPayment),
-                loanTerm: Number(c.loanTerm),
-                rate: Number(c.rate)
-            };
-            return {
-                ...safeC,
-                ...calculateLoan(safeC.price, safeC.downPayment, safeC.loanTerm, safeC.rate),
-                remainingMonths: safeC.loanTerm * 12
-            };
-        });
-        // --- 修正結束 ---
-
-        const dataPoints = []; 
-        const labels = [];      
-        let bankruptAge = null; 
-        let totalEarned = 0;    
-        let totalPassive = 0;   
-        
-        let expenseStats = { living:0, housing:0, car:0, children:0, parents:0, marriage:0, customTotal:0 };
-        let customBreakdown = {};
-
-        for (let i = params.currentAge; i <= params.lifeExpectancy; i++) {
-            let yearIncome = 0;
-            let yearDetails = { living:0, housing:0, car:0, children:0, parents:0, marriage:0, custom:0 };
-            const deflator = Math.pow(1 + params.inflationRate/100, i - params.currentAge);
-
-            if (i < params.retireAge) { 
-                yearIncome += currentMonthlyWage * (12 + params.bonusMonths); 
-                currentMonthlyWage *= (1 + params.incomeGrowth/100); 
-            }
-            
-            passiveIncomes.forEach(pi => {
-                if (i >= pi.startAge && i <= pi.endAge) {
-                    let annual = 0;
-                    if (pi.frequency === 'daily') annual = pi.amount * 365;
-                    else if (pi.frequency === 'monthly') annual = pi.amount * 12;
-                    else if (pi.frequency === 'quarterly') annual = pi.amount * 4;
-                    else annual = pi.amount;
-                    const nom = annual * deflator;
-                    yearIncome += nom;
-                    totalPassive += nom;
-                }
-            });
-
-            if (params.enableLivingExpense) yearDetails.living += params.monthlyExpense * 10000 * 12 * deflator;
-            if (params.hasParents && i >= params.parentsStartAge && i <= params.parentsEndAge) yearDetails.parents += params.parentsMonthlyCost * 10000 * 12 * deflator;
-
-            propertyPlans.forEach(plan => {
-                // 這裡的 i 和 plan.buyAge 已經都是 Number，比較會正確
-                if (i === plan.buyAge) {
-                    const inflatedPrice = plan.price * 10000 * deflator; 
-                    yearDetails.housing += inflatedPrice * (plan.downPayment/100); 
-                    plan.actualMonthlyPayment = calculateLoan(plan.price * deflator, plan.downPayment, plan.loanTerm, plan.rate).monthly;
-                }
-                if (i >= plan.buyAge && plan.remainingMonths > 0) {
-                    const monthsToPay = Math.min(12, plan.remainingMonths); 
-                    yearDetails.housing += (plan.actualMonthlyPayment || 0) * monthsToPay; 
-                    plan.remainingMonths -= monthsToPay;
-                }
-            });
-
-            carPlans.forEach(plan => {
-                if (i === plan.buyAge) {
-                    const inflatedPrice = plan.price * 10000 * deflator;
-                    yearDetails.car += inflatedPrice * (plan.downPayment/100);
-                    plan.actualMonthlyPayment = calculateLoan(plan.price * deflator, plan.downPayment, plan.loanTerm, plan.rate).monthly;
-                }
-                if (i >= plan.buyAge && plan.remainingMonths > 0) {
-                    const monthsToPay = Math.min(12, plan.remainingMonths);
-                    yearDetails.car += (plan.actualMonthlyPayment || 0) * monthsToPay;
-                    plan.remainingMonths -= monthsToPay;
-                }
-                if (i >= plan.buyAge && i < plan.buyAge + 15) yearDetails.car += (plan.price * 10000 * 0.1) * deflator;
-            });
-
-            childrenList.forEach(child => {
-                const childAge = i - child.birthAge;
-                if (childAge >= 0) { 
-                    let currentStageStart = 0;
-                    for (let stage of child.stages) {
-                        const stageEnd = currentStageStart + stage.duration;
-                        if (childAge >= currentStageStart && childAge < stageEnd) {
-                            yearDetails.children += stage.cost * 10000 * 12 * deflator;
-                            break;
-                        }
-                        currentStageStart += stage.duration;
+        /**
+         * 調用 Gemini AI API 的函數
+         * @param {string} prompt - 要傳送給 AI 的提示詞
+         * @returns {Promise<string>} - AI 的回應文字
+         */
+        const callGeminiAPI = async (prompt) => {
+            try {
+                const maxRetries = 3; // 最大重試次數
+                let attempt = 0;
+                // 重試機制：最多嘗試 3 次
+                while (attempt < maxRetries) {
+                    try {
+                        // 發送 POST 請求到 Gemini API
+                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                        });
+                        if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                        const data = await response.json();
+                        // 返回 AI 生成的文字，或預設錯誤訊息
+                        return data.candidates?.[0]?.content?.parts?.[0]?.text || "AI 暫時無法回應，請稍後再試。";
+                    } catch (err) {
+                        attempt++;
+                        if (attempt === maxRetries) throw err;
+                        // 指數退避：等待時間逐次加倍 (1s, 2s, 4s)
+                        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
                     }
                 }
-            });
-
-            if (params.hasMarriage && i === params.marriageAge) yearDetails.marriage += params.marriageCost * 10000 * deflator;
-
-            customExpenses.forEach(exp => {
-                let isHappening = false;
-                let annualAmount = 0;
-                if (exp.frequency === 'once') {
-                    if (i === exp.startAge) { annualAmount = exp.amount; isHappening = true; }
-                } else {
-                    const end = exp.endAge || 85;
-                    if (i >= exp.startAge && i <= end) {
-                        if (exp.frequency === 'weekly') annualAmount = exp.amount * 52;
-                        else if (exp.frequency === 'monthly') annualAmount = exp.amount * 12;
-                        else if (exp.frequency === 'yearly') annualAmount = exp.amount;
-                        isHappening = true;
-                    }
-                }
-                if (isHappening) {
-                    const cost = annualAmount * 10000 * deflator; 
-                    yearDetails.custom += cost;
-                    const key = exp.name || '未命名項目';
-                    if (!customBreakdown[key]) customBreakdown[key] = 0;
-                    customBreakdown[key] += cost;
-                }
-            });
-
-            const yearExpenseTotal = Object.values(yearDetails).reduce((a, b) => a + b, 0); 
-            
-            Object.keys(yearDetails).forEach(k => {
-                if (k === 'custom') expenseStats.customTotal += yearDetails[k];
-                else if (expenseStats[k] !== undefined) expenseStats[k] += yearDetails[k];
-            });
-            expenseStats.total = (expenseStats.total || 0) + yearExpenseTotal; 
-
-            totalEarned += yearIncome;
-            nominalAssets = nominalAssets + yearIncome - yearExpenseTotal;
-
-            if (nominalAssets > 0) {
-                nominalAssets *= (1 + params.investReturn/100);
-            } else {
-                nominalAssets *= 1.05; 
-                if (!bankruptAge) bankruptAge = i; 
+            } catch (error) {
+                console.error("Gemini API Failed:", error);
+                return "連線發生錯誤，請檢查網路或 API Key。";
             }
-
-            labels.push(`${i}歲`);
-            dataPoints.push(Math.round((nominalAssets / deflator) / 10000));
-        }
-        
-        return { labels, dataPoints, bankruptAge, totalEarned, totalPassive, expenseStats, customBreakdown, finalRealAssets: dataPoints[dataPoints.length-1] * 10000 };
-    };
-
-    const IMEInput = ({ value, onChange, className, placeholder, disabled, style }) => {
-        const [localValue, setLocalValue] = useState(value);
-        const isComposing = useRef(false); 
-        useEffect(() => { if (!isComposing.current) setLocalValue(value); }, [value]);
-        const handleChange = (e) => { 
-            setLocalValue(e.target.value); 
-            if (!isComposing.current) onChange(e); 
         };
-        return <input type="text" value={localValue} onChange={handleChange} onCompositionStart={() => { isComposing.current = true; }} onCompositionEnd={(e) => { isComposing.current = false; onChange(e); }} className={className} placeholder={placeholder} disabled={disabled} style={style} />;
-    };
 
-    const CollapsibleSection = ({ title, isOpen, onToggle, children, icon, colorClass = "bg-white", headerClass="" }) => (
-        <div className={`rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-4 transition-all duration-300 ${colorClass}`}>
-            <button onClick={onToggle} className={`w-full flex items-center justify-between p-4 text-left font-bold text-slate-700 hover:bg-black/5 transition-colors ${headerClass}`}>
-                <div className="flex items-center gap-2">{icon && <span className="text-lg">{icon}</span>}<span>{title}</span></div>
-                <i className={`ph-bold ph-caret-down transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}></i>
-            </button>
-            <div className={`transition-all duration-300 ease-in-out ${isOpen ? 'max-h-[3000px] opacity-100' : 'max-h-0 opacity-0'}`}>
-                <div className="p-4 border-t border-black/5">{children}</div>
-            </div>
-        </div>
-    );
+        /**
+         * 計算貸款每月還款金額（使用等額本息摩還法）
+         * @param {number} priceWan - 總價（單位：萬）
+         * @param {number} downPaymentPercent - 頭期款百分比
+         * @param {number} years - 貸款年限
+         * @param {number} ratePercent - 年利率百分比
+         * @returns {object} - 包含 monthly(月付), daily(日付), totalLoan(總貸款)
+         */
+        const calculateLoan = (priceWan, downPaymentPercent, years, ratePercent) => {
+            // 計算總貸款金額 = 總價 * (1 - 頭期款比例)
+            const totalLoan = priceWan * 10000 * (1 - downPaymentPercent / 100);
+            const monthlyRate = (ratePercent / 100) / 12; // 月利率
+            const months = years * 12; // 總月數
+            let monthlyPayment = 0;
+            if (monthlyRate > 0) {
+                // 等額本息摩還公式： M = P * r * (1+r)^n / ((1+r)^n - 1)
+                monthlyPayment = (totalLoan * monthlyRate * Math.pow(1 + monthlyRate, months)) / (Math.pow(1 + monthlyRate, months) - 1);
+            } else {
+                // 如果利率為 0，則平均分摊
+                monthlyPayment = totalLoan / months;
+            }
+            return { monthly: Math.round(monthlyPayment), daily: Math.round(monthlyPayment / 30), totalLoan };
+        };
 
-    const AddItemBox = ({ title, children, onAdd, disabled, footer }) => (
-        <div className="bg-slate-50 p-3 rounded mb-3 border border-slate-200">
-            <div className="text-xs text-slate-500 mb-2 font-bold">{title}</div>
-            {children}
-            {footer && <div className="mt-2 pt-2 border-t border-slate-200 text-xs text-slate-500">{footer}</div>}
-            <button onClick={onAdd} disabled={disabled} className="w-full py-2 bg-slate-600 text-white rounded text-sm hover:bg-slate-700 disabled:opacity-50 font-bold mt-2">新增</button>
-        </div>
-    );
+        /**
+         * 核心財務模擬函數 - 模擬從目前年齡到預期壽命的財務狀況
+         * @param {object} data - 包含所有模擬參數的物件
+         * @returns {object} - 模擬結果，包含資產曲線、破產年齡等資訊
+         */
+        const coreSimulation = (data) => {
+            // 解構取得所有輸入參數
+            const { params, properties, cars, childrenList, passiveIncomes, customExpenses } = data;
+            let age = params.currentAge; // 當前年齡
+            let nominalAssets = params.currentAssets * 10000; // 名目資產（轉換為元）
+            let currentMonthlyWage = params.monthlyIncome * 10000; // 當前月薪（轉換為元）
 
-    const NumberControl = ({ label, value, onChange, min, max, step = 1, unit = '', subLabel = '', disabled = false, readOnly = false, compact = false }) => {
-        const handleStep = (delta) => { if (disabled || readOnly) return; const nextVal = parseFloat(((Number(value) || 0) + delta).toFixed(2)); if (nextVal >= min && nextVal <= max) onChange(nextVal); };
-        const handleChange = (e) => { if (disabled || readOnly) return; const inputVal = e.target.value; if (inputVal === '') { onChange(''); return; } const val = parseFloat(inputVal); if (!isNaN(val)) onChange(val); };
-        const handleBlur = () => { if (value === '' || value < min) onChange(min); else if (value > max) onChange(max); };
-        return (
-            <div className={`transition-all ${disabled ? 'opacity-40 pointer-events-none' : 'opacity-100'} ${readOnly ? 'opacity-80' : ''} ${compact ? 'mb-2' : 'mb-4'}`}>
-                {!compact && <div className="flex justify-between items-end mb-1"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{label} <span className="text-slate-400 font-normal lowercase">{subLabel}</span></label><span className={`text-xs font-mono font-bold ${value < 0 ? 'text-red-500' : 'text-blue-600'}`}>{value} {unit}</span></div>}
-                <div className="flex items-center gap-1">
-                    {compact && <span className="text-xs text-slate-500 w-16 truncate mr-1" title={label}>{label}</span>}
-                    {!readOnly && <button onClick={() => handleStep(-step)} className="w-6 h-8 flex items-center justify-center bg-white border border-slate-300 rounded hover:bg-slate-100 text-slate-600">-</button>}
-                    <div className="flex-1"><input type="number" value={value} onChange={handleChange} onBlur={handleBlur} readOnly={readOnly} className={`w-full h-8 text-center border border-slate-300 rounded text-sm font-semibold bg-white ${value < 0 ? 'text-red-600' : 'text-slate-700'} ${readOnly ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`}/></div>
-                    {!readOnly && <button onClick={() => handleStep(step)} className="w-6 h-8 flex items-center justify-center bg-white border border-slate-300 rounded hover:bg-slate-100 text-slate-600">+</button>}
+            // --- 修正開始：強制轉型為 Number 以確保運算邏輯正確 ---
+            // 處理房產計畫：將所有數值欄位轉換為 Number 類型，避免字串比較錯誤
+            const propertyPlans = properties.map(p => {
+                const safeP = {
+                    ...p,
+                    buyAge: Number(p.buyAge),
+                    price: Number(p.price),
+                    downPayment: Number(p.downPayment),
+                    loanTerm: Number(p.loanTerm),
+                    rate: Number(p.rate)
+                };
+                return {
+                    ...safeP,
+                    // 計算貸款資訊並加入物件
+                    ...calculateLoan(safeP.price, safeP.downPayment, safeP.loanTerm, safeP.rate),
+                    remainingMonths: safeP.loanTerm * 12 // 剩餘還款月數
+                };
+            });
+
+            // 處理車輛計畫：同樣進行類型轉換和貸款計算
+            const carPlans = cars.map(c => {
+                const safeC = {
+                    ...c,
+                    buyAge: Number(c.buyAge),
+                    price: Number(c.price),
+                    downPayment: Number(c.downPayment),
+                    loanTerm: Number(c.loanTerm),
+                    rate: Number(c.rate)
+                };
+                return {
+                    ...safeC,
+                    ...calculateLoan(safeC.price, safeC.downPayment, safeC.loanTerm, safeC.rate),
+                    remainingMonths: safeC.loanTerm * 12
+                };
+            });
+            // --- 修正結束 ---
+
+            // 初始化結果陣列和統計變數
+            const dataPoints = []; // 每年的實質資產數據點（用於繪圖）
+            const labels = []; // 年齡標籤（X軸）
+            let bankruptAge = null; // 破產年齡（資產首次為負的年齡）
+            let totalEarned = 0; // 總收入累計
+            let totalPassive = 0; // 被動收入累計
+
+            // 支出統計物件（累計各類別的總支出）
+            let expenseStats = { living: 0, housing: 0, car: 0, children: 0, parents: 0, marriage: 0, customTotal: 0 };
+            let customBreakdown = {}; // 自訂支出的細項分類
+
+            // === 主要模擬循環：逐年計算財務狀況 ===
+            for (let i = params.currentAge; i <= params.lifeExpectancy; i++) {
+                let yearIncome = 0; // 該年度總收入
+                let yearDetails = { living: 0, housing: 0, car: 0, children: 0, parents: 0, marriage: 0, custom: 0 }; // 該年度各類支出
+                const deflator = Math.pow(1 + params.inflationRate / 100, i - params.currentAge); // 通膨調整係數
+
+                // --- 1. 計算工作收入 ---
+                if (i < params.retireAge) {
+                    // 退休前：計算年薪（月薪 × (12個月 + 年終獎金月數)）
+                    yearIncome += currentMonthlyWage * (12 + params.bonusMonths);
+                    // 每年薪資成長
+                    currentMonthlyWage *= (1 + params.incomeGrowth / 100);
+                }
+
+                // --- 2. 計算被動收入 ---
+                passiveIncomes.forEach(pi => {
+                    // 檢查該年齡是否在被動收入的有效期間內
+                    if (i >= pi.startAge && i <= pi.endAge) {
+                        let annual = 0;
+                        // 根據頻率轉換為年度金額
+                        if (pi.frequency === 'daily') annual = pi.amount * 365;
+                        else if (pi.frequency === 'monthly') annual = pi.amount * 12;
+                        else if (pi.frequency === 'quarterly') annual = pi.amount * 4;
+                        else annual = pi.amount; // yearly
+                        const nom = annual * deflator; // 考慮通膨調整
+                        yearIncome += nom;
+                        totalPassive += nom; // 累計被動收入總額
+                    }
+                });
+
+                // --- 3. 計算基本生活支出 ---
+                if (params.enableLivingExpense) yearDetails.living += params.monthlyExpense * 10000 * 12 * deflator;
+                // --- 4. 計算孝親費 ---
+                if (params.hasParents && i >= params.parentsStartAge && i <= params.parentsEndAge) yearDetails.parents += params.parentsMonthlyCost * 10000 * 12 * deflator;
+
+                // --- 5. 計算房產相關支出 ---
+                propertyPlans.forEach(plan => {
+                    // 這裡的 i 和 plan.buyAge 已經都是 Number，比較會正確
+                    if (i === plan.buyAge) {
+                        // 購屋當年：支付頭期款
+                        const inflatedPrice = plan.price * 10000 * deflator; // 考慮通膨後的房價
+                        yearDetails.housing += inflatedPrice * (plan.downPayment / 100);
+                        // 計算實際月付金額（考慮通膨後的價格）
+                        plan.actualMonthlyPayment = calculateLoan(plan.price * deflator, plan.downPayment, plan.loanTerm, plan.rate).monthly;
+                    }
+                    // 還款期間：支付貸款
+                    if (i >= plan.buyAge && plan.remainingMonths > 0) {
+                        const monthsToPay = Math.min(12, plan.remainingMonths); // 該年度要還幾個月
+                        yearDetails.housing += (plan.actualMonthlyPayment || 0) * monthsToPay;
+                        plan.remainingMonths -= monthsToPay; // 扣除已還月數
+                    }
+                });
+
+                // --- 6. 計算車輛相關支出 ---
+                carPlans.forEach(plan => {
+                    if (i === plan.buyAge) {
+                        // 購車當年：支付頭期款
+                        const inflatedPrice = plan.price * 10000 * deflator;
+                        yearDetails.car += inflatedPrice * (plan.downPayment / 100);
+                        plan.actualMonthlyPayment = calculateLoan(plan.price * deflator, plan.downPayment, plan.loanTerm, plan.rate).monthly;
+                    }
+                    // 還款期間：支付貸款
+                    if (i >= plan.buyAge && plan.remainingMonths > 0) {
+                        const monthsToPay = Math.min(12, plan.remainingMonths);
+                        yearDetails.car += (plan.actualMonthlyPayment || 0) * monthsToPay;
+                        plan.remainingMonths -= monthsToPay;
+                    }
+                    // 持有期間（15年內）：每年維護費用（假設為車價的10%）
+                    if (i >= plan.buyAge && i < plan.buyAge + 15) yearDetails.car += (plan.price * 10000 * 0.1) * deflator;
+                });
+
+                // --- 7. 計算子女養育費用 ---
+                childrenList.forEach(child => {
+                    const childAge = i - child.birthAge; // 計算小孩在該年的年齡
+                    if (childAge >= 0) { // 小孩已出生
+                        let currentStageStart = 0;
+                        // 遍歷各個成長階段，找出小孩目前處於哪個階段
+                        for (let stage of child.stages) {
+                            const stageEnd = currentStageStart + stage.duration;
+                            if (childAge >= currentStageStart && childAge < stageEnd) {
+                                // 該階段的年度費用 = 月費用 × 12 × 通膨調整
+                                yearDetails.children += stage.cost * 10000 * 12 * deflator;
+                                break; // 找到對應階段後跳出
+                            }
+                            currentStageStart += stage.duration;
+                        }
+                    }
+                });
+
+                // --- 8. 計算婚姻費用 ---
+                if (params.hasMarriage && i === params.marriageAge) yearDetails.marriage += params.marriageCost * 10000 * deflator;
+
+                // --- 9. 計算自訂支出 ---
+                customExpenses.forEach(exp => {
+                    let isHappening = false;
+                    let annualAmount = 0;
+                    if (exp.frequency === 'once') {
+                        // 單次支出：只在指定年齡發生
+                        if (i === exp.startAge) { annualAmount = exp.amount; isHappening = true; }
+                    } else {
+                        // 週期性支出：在起迄年齡之間持續發生
+                        const end = exp.endAge || 85;
+                        if (i >= exp.startAge && i <= end) {
+                            if (exp.frequency === 'weekly') annualAmount = exp.amount * 52;
+                            else if (exp.frequency === 'monthly') annualAmount = exp.amount * 12;
+                            else if (exp.frequency === 'yearly') annualAmount = exp.amount;
+                            isHappening = true;
+                        }
+                    }
+                    if (isHappening) {
+                        const cost = annualAmount * 10000 * deflator; // 轉換為元並考慮通膨
+                        yearDetails.custom += cost;
+                        const key = exp.name || '未命名項目';
+                        if (!customBreakdown[key]) customBreakdown[key] = 0;
+                        customBreakdown[key] += cost; // 記錄到細項分類
+                    }
+                });
+
+                // --- 10. 統計該年度總支出 ---
+                const yearExpenseTotal = Object.values(yearDetails).reduce((a, b) => a + b, 0);
+
+                // 累加到各類別的生涯總支出
+                Object.keys(yearDetails).forEach(k => {
+                    if (k === 'custom') expenseStats.customTotal += yearDetails[k];
+                    else if (expenseStats[k] !== undefined) expenseStats[k] += yearDetails[k];
+                });
+                expenseStats.total = (expenseStats.total || 0) + yearExpenseTotal;
+
+                // --- 11. 更新資產狀況 ---
+                totalEarned += yearIncome; // 累計總收入
+                nominalAssets = nominalAssets + yearIncome - yearExpenseTotal; // 名目資產 = 上年資產 + 收入 - 支出
+
+                // 資產投資報酬計算
+                if (nominalAssets > 0) {
+                    // 正資產：按投資報酬率成長
+                    nominalAssets *= (1 + params.investReturn / 100);
+                } else {
+                    // 負資產（負債）：按5%利率計息
+                    nominalAssets *= 1.05;
+                    if (!bankruptAge) bankruptAge = i; // 記錄首次破產年齡
+                }
+
+                // --- 12. 記錄該年度數據 ---
+                labels.push(`${i}歲`);
+                // 將名目資產轉換為實質資產（扣除通膨影響）並轉為萬元
+                dataPoints.push(Math.round((nominalAssets / deflator) / 10000));
+            }
+
+            // 返回模擬結果物件
+            return { labels, dataPoints, bankruptAge, totalEarned, totalPassive, expenseStats, customBreakdown, finalRealAssets: dataPoints[dataPoints.length - 1] * 10000 };
+        };
+
+        /**
+         * IMEInput 組件 - 支援中文輸入法的文字輸入框
+         * 解決中文輸入時的 onChange 觸發問題
+         */
+        const IMEInput = ({ value, onChange, className, placeholder, disabled, style }) => {
+            const [localValue, setLocalValue] = useState(value); // 本地狀態，用於即時顯示
+            const isComposing = useRef(false); // 標記是否正在使用輸入法組字
+            // 當外部 value 改變時，同步更新本地值（但不在組字過程中）
+            useEffect(() => { if (!isComposing.current) setLocalValue(value); }, [value]);
+            const handleChange = (e) => {
+                setLocalValue(e.target.value); // 立即更新本地顯示
+                if (!isComposing.current) onChange(e); // 只在非組字狀態下觸發外部 onChange
+            };
+            return <input type="text" value={localValue} onChange={handleChange} onCompositionStart={() => { isComposing.current = true; }} onCompositionEnd={(e) => { isComposing.current = false; onChange(e); }} className={className} placeholder={placeholder} disabled={disabled} style={style} />;
+        };
+
+        /**
+         * CollapsibleSection 組件 - 可折疊的區塊
+         * 用於組織側邊欄的各個設定區域
+         */
+        const CollapsibleSection = ({ title, isOpen, onToggle, children, icon, colorClass = "bg-white", headerClass = "" }) => (
+            <div className={`rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-4 transition-all duration-300 ${colorClass}`}>
+                {/* 標題列：可點擊展開/收合 */}
+                <button onClick={onToggle} className={`w-full flex items-center justify-between p-4 text-left font-bold text-slate-700 hover:bg-black/5 transition-colors ${headerClass}`}>
+                    <div className="flex items-center gap-2">{icon && <span className="text-lg">{icon}</span>}<span>{title}</span></div>
+                    {/* 箭頭圖標：根據展開狀態旋轉 */}
+                    <i className={`ph-bold ph-caret-down transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}></i>
+                </button>
+                {/* 內容區域：使用 max-height 實現平滑展開/收合動畫 */}
+                <div className={`transition-all duration-300 ease-in-out ${isOpen ? 'max-h-[3000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                    <div className="p-4 border-t border-black/5">{children}</div>
                 </div>
-                {!readOnly && !compact && <input type="range" min={min} max={max} step={step} value={Number(value) || min} onChange={(e) => !disabled && onChange(parseFloat(e.target.value))} className="w-full mt-2 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500 block"/>}
             </div>
         );
-    };
 
-    const AIAdvisorModal = ({ isOpen, onClose, data, simulationResult }) => {
-        const [analysis, setAnalysis] = useState("");
-        const [isLoading, setIsLoading] = useState(false);
-        useEffect(() => { if (isOpen && !analysis) generateAdvice(); }, [isOpen]);
-        const generateAdvice = async () => {
-            setIsLoading(true);
-            const prompt = `你是一位專業的台灣理財顧問。請根據以下使用者模擬數據提供具體、在地化的財務建議。請使用繁體中文回答，語氣專業但親切。請使用 Markdown 格式。
+        /**
+         * AddItemBox 組件 - 新增項目的表單容器
+         * 用於房產、車輛、子女等項目的新增介面
+         */
+        const AddItemBox = ({ title, children, onAdd, disabled, footer }) => (
+            <div className="bg-slate-50 p-3 rounded mb-3 border border-slate-200">
+                <div className="text-xs text-slate-500 mb-2 font-bold">{title}</div>
+                {children} {/* 表單輸入欄位 */}
+                {footer && <div className="mt-2 pt-2 border-t border-slate-200 text-xs text-slate-500">{footer}</div>} {/* 提示訊息 */}
+                <button onClick={onAdd} disabled={disabled} className="w-full py-2 bg-slate-600 text-white rounded text-sm hover:bg-slate-700 disabled:opacity-50 font-bold mt-2">新增</button>
+            </div>
+        );
+
+        /**
+         * NumberControl 組件 - 數字輸入控制器
+         * 提供 +/- 按鈕、拖動條和直接輸入三種方式調整數值
+         */
+        const NumberControl = ({ label, value, onChange, min, max, step = 1, unit = '', subLabel = '', disabled = false, readOnly = false, compact = false }) => {
+            // 處理 +/- 按鈕點擊：增減指定步長
+            const handleStep = (delta) => { if (disabled || readOnly) return; const nextVal = parseFloat(((Number(value) || 0) + delta).toFixed(2)); if (nextVal >= min && nextVal <= max) onChange(nextVal); };
+            // 處理直接輸入：允許空值和有效數字
+            const handleChange = (e) => { if (disabled || readOnly) return; const inputVal = e.target.value; if (inputVal === '') { onChange(''); return; } const val = parseFloat(inputVal); if (!isNaN(val)) onChange(val); };
+            // 處理失焦：確保數值在有效範圍內
+            const handleBlur = () => { if (value === '' || value < min) onChange(min); else if (value > max) onChange(max); };
+            return (
+                <div className={`transition-all ${disabled ? 'opacity-40 pointer-events-none' : 'opacity-100'} ${readOnly ? 'opacity-80' : ''} ${compact ? 'mb-2' : 'mb-4'}`}>
+                    {/* 非緊湊模式：顯示標籤和當前值 */}
+                    {!compact && <div className="flex justify-between items-end mb-1"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{label} <span className="text-slate-400 font-normal lowercase">{subLabel}</span></label><span className={`text-xs font-mono font-bold ${value < 0 ? 'text-red-500' : 'text-blue-600'}`}>{value} {unit}</span></div>}
+                    <div className="flex items-center gap-1">
+                        {compact && <span className="text-xs text-slate-500 w-16 truncate mr-1" title={label}>{label}</span>}
+                        {!readOnly && <button onClick={() => handleStep(-step)} className="w-6 h-8 flex items-center justify-center bg-white border border-slate-300 rounded hover:bg-slate-100 text-slate-600">-</button>}
+                        <div className="flex-1"><input type="number" value={value} onChange={handleChange} onBlur={handleBlur} readOnly={readOnly} className={`w-full h-8 text-center border border-slate-300 rounded text-sm font-semibold bg-white ${value < 0 ? 'text-red-600' : 'text-slate-700'} ${readOnly ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`} /></div>
+                        {!readOnly && <button onClick={() => handleStep(step)} className="w-6 h-8 flex items-center justify-center bg-white border border-slate-300 rounded hover:bg-slate-100 text-slate-600">+</button>}
+                    </div>
+                    {/* 非緊湊且非唯讀模式：顯示拖動條 */}
+                    {!readOnly && !compact && <input type="range" min={min} max={max} step={step} value={Number(value) || min} onChange={(e) => !disabled && onChange(parseFloat(e.target.value))} className="w-full mt-2 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500 block" />}
+                </div>
+            );
+        };
+
+        /**
+         * AIAdvisorModal 組件 - AI 財務顧問對話框
+         * 使用 Gemini API 生成個人化的理財建議
+         */
+        const AIAdvisorModal = ({ isOpen, onClose, data, simulationResult }) => {
+            const [analysis, setAnalysis] = useState(""); // AI 分析結果
+            const [isLoading, setIsLoading] = useState(false); // 載入狀態
+            // 當對話框打開且還沒有分析結果時，自動生成建議
+            useEffect(() => { if (isOpen && !analysis) generateAdvice(); }, [isOpen]);
+            const generateAdvice = async () => {
+                setIsLoading(true);
+                // 構建詳細的提示詞，包含用戶現況和模擬結果
+                const prompt = `你是一位專業的台灣理財顧問。請根據以下使用者模擬數據提供具體、在地化的財務建議。請使用繁體中文回答，語氣專業但親切。請使用 Markdown 格式。
                 【使用者現況】
                 - 年齡: ${data.params.currentAge} 歲 (預期壽命 ${data.params.lifeExpectancy})
                 - 月薪: ${data.params.monthlyIncome} 萬
@@ -317,670 +501,672 @@
                 - 房產數: ${data.properties.length} (總負債詳見貸款)
                 【模擬結果】
                 - 破產風險: ${simulationResult.bankruptAge ? `在 ${simulationResult.bankruptAge} 歲破產` : '無破產風險'}
-                - 85歲累積實質資產: ${Math.round(simulationResult.finalRealAssets/10000)} 萬
-                - 被動收入佔總收入比例: ${simulationResult.totalEarned > 0 ? ((simulationResult.totalPassive / simulationResult.totalEarned)*100).toFixed(1) : 0}%
+                - 85歲累積實質資產: ${Math.round(simulationResult.finalRealAssets / 10000)} 萬
+                - 被動收入佔總收入比例: ${simulationResult.totalEarned > 0 ? ((simulationResult.totalPassive / simulationResult.totalEarned) * 100).toFixed(1) : 0}%
                 請提供 3 點關鍵建議，針對以下面向：1. 資產配置與投資效率 2. 重大支出風險 3. 開源節流的具體方向 (針對台灣生活環境)`;
-            const result = await callGeminiAPI(prompt);
-            setAnalysis(result);
-            setIsLoading(false);
-        };
-        if (!isOpen) return null;
-        return (
-            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
-                    <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 text-white flex justify-between items-center"><h2 className="font-bold text-lg flex items-center gap-2"><i className="ph-fill ph-sparkle"></i> AI 財務顧問診斷</h2><button onClick={onClose} className="hover:bg-white/20 rounded-full p-1"><i className="ph-bold ph-x"></i></button></div>
-                    <div className="p-6 overflow-y-auto custom-scrollbar flex-1 relative">
-                        {isLoading ? <div className="flex flex-col items-center justify-center h-48 space-y-4"><div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div><div className="text-slate-500 text-sm animate-pulse">正在分析您的財務數據...</div></div> : <div className="prose prose-slate text-sm w-full max-w-none" dangerouslySetInnerHTML={{ __html: marked.parse(analysis) }}></div>}
+                const result = await callGeminiAPI(prompt);
+                setAnalysis(result);
+                setIsLoading(false);
+            };
+            if (!isOpen) return null; // 對話框關閉時不渲染
+            return (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
+                        {/* 標題列 */}
+                        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 text-white flex justify-between items-center"><h2 className="font-bold text-lg flex items-center gap-2"><i className="ph-fill ph-sparkle"></i> AI 財務顧問診斷</h2><button onClick={onClose} className="hover:bg-white/20 rounded-full p-1"><i className="ph-bold ph-x"></i></button></div>
+                        <div className="p-6 overflow-y-auto custom-scrollbar flex-1 relative">
+                            {isLoading ? <div className="flex flex-col items-center justify-center h-48 space-y-4"><div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div><div className="text-slate-500 text-sm animate-pulse">正在分析您的財務數據...</div></div> : <div className="prose prose-slate text-sm w-full max-w-none" dangerouslySetInnerHTML={{ __html: marked.parse(analysis) }}></div>}
+                        </div>
+                        <div className="p-4 border-t bg-slate-50 flex justify-end"><button onClick={generateAdvice} className="mr-2 px-4 py-2 text-slate-600 hover:bg-slate-200 rounded text-sm font-bold">重新分析</button><button onClick={onClose} className="px-6 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 text-sm font-bold">了解</button></div>
                     </div>
-                    <div className="p-4 border-t bg-slate-50 flex justify-end"><button onClick={generateAdvice} className="mr-2 px-4 py-2 text-slate-600 hover:bg-slate-200 rounded text-sm font-bold">重新分析</button><button onClick={onClose} className="px-6 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 text-sm font-bold">了解</button></div>
                 </div>
-            </div>
-        );
-    };
-
-    const AIBudgetOptimizer = ({ dailyItems, onOptimize }) => {
-        const [suggestion, setSuggestion] = useState(null);
-        const [loading, setLoading] = useState(false);
-        const handleOptimize = async () => {
-            if (dailyItems.length === 0) return;
-            setLoading(true);
-            const itemsStr = dailyItems.map(i => `${i.name}: ${i.cost}元`).join(', ');
-            const prompt = `你是一位精打細算的台灣生活管家。請檢視使用者的每日開銷清單：[${itemsStr}]。請找出 1-2 個可以「無痛省錢」的具體建議。不需要長篇大論，請直接給出簡短建議 (50字以內)。`;
-            const result = await callGeminiAPI(prompt);
-            setSuggestion(result);
-            setLoading(false);
+            );
         };
-        return (
-            <div className="mt-3 border-t border-dashed border-slate-300 pt-3">
-                {!suggestion && !loading && <button onClick={handleOptimize} className="w-full py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded text-xs font-bold shadow hover:opacity-90 flex items-center justify-center gap-1 ai-pulse"><i className="ph-fill ph-magic-wand"></i> ✨ AI 幫我省錢</button>}
-                {loading && <div className="text-xs text-center text-slate-400 py-2">思考中...</div>}
-                {suggestion && <div className="bg-purple-50 p-3 rounded text-xs border border-purple-100"><div className="font-bold text-purple-700 mb-1 flex items-center gap-1"><i className="ph-fill ph-lightbulb"></i> 省錢點子：</div><div className="text-slate-700">{suggestion}</div><button onClick={() => setSuggestion(null)} className="text-[10px] text-slate-400 underline mt-2">關閉</button></div>}
-            </div>
-        );
-    };
 
-    const ExpensePieChart = ({ data, customBreakdown }) => {
-        const chartRef = useRef(null); 
-        const chartInstanceRef = useRef(null); 
-        useEffect(() => {
-            const ctx = chartRef.current.getContext('2d');
-            if (chartInstanceRef.current) chartInstanceRef.current.destroy(); 
-            
-            let labels = ['生活費', '房產支出', '子女養育', '車輛交通', '奉養父母', '婚姻'];
-            let values = [data.living, data.housing, data.children, data.car, data.parents, data.marriage];
-            let colors = ['#94a3b8', '#8b5cf6', '#f97316', '#0ea5e9', '#14b8a6', '#ec4899'];
+        const AIBudgetOptimizer = ({ dailyItems, onOptimize }) => {
+            const [suggestion, setSuggestion] = useState(null);
+            const [loading, setLoading] = useState(false);
+            const handleOptimize = async () => {
+                if (dailyItems.length === 0) return;
+                setLoading(true);
+                const itemsStr = dailyItems.map(i => `${i.name}: ${i.cost}元`).join(', ');
+                const prompt = `你是一位精打細算的台灣生活管家。請檢視使用者的每日開銷清單：[${itemsStr}]。請找出 1-2 個可以「無痛省錢」的具體建議。不需要長篇大論，請直接給出簡短建議 (50字以內)。`;
+                const result = await callGeminiAPI(prompt);
+                setSuggestion(result);
+                setLoading(false);
+            };
+            return (
+                <div className="mt-3 border-t border-dashed border-slate-300 pt-3">
+                    {!suggestion && !loading && <button onClick={handleOptimize} className="w-full py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded text-xs font-bold shadow hover:opacity-90 flex items-center justify-center gap-1 ai-pulse"><i className="ph-fill ph-magic-wand"></i> ✨ AI 幫我省錢</button>}
+                    {loading && <div className="text-xs text-center text-slate-400 py-2">思考中...</div>}
+                    {suggestion && <div className="bg-purple-50 p-3 rounded text-xs border border-purple-100"><div className="font-bold text-purple-700 mb-1 flex items-center gap-1"><i className="ph-fill ph-lightbulb"></i> 省錢點子：</div><div className="text-slate-700">{suggestion}</div><button onClick={() => setSuggestion(null)} className="text-[10px] text-slate-400 underline mt-2">關閉</button></div>}
+                </div>
+            );
+        };
 
-            if (customBreakdown && Object.keys(customBreakdown).length > 0) {
-                const customKeys = Object.keys(customBreakdown);
-                labels = [...labels, ...customKeys];
-                values = [...values, ...customKeys.map(k => customBreakdown[k])];
-                const customColors = customKeys.map((_, i) => `hsl(${140 + i * 20}, 70%, ${40 + (i % 3) * 10}%)`);
-                colors = [...colors, ...customColors];
-            } else if (data.customTotal > 0) {
-                labels.push('自訂支出');
-                values.push(data.customTotal);
-                colors.push('#10b981');
-            }
+        const ExpensePieChart = ({ data, customBreakdown }) => {
+            const chartRef = useRef(null);
+            const chartInstanceRef = useRef(null);
+            useEffect(() => {
+                const ctx = chartRef.current.getContext('2d');
+                if (chartInstanceRef.current) chartInstanceRef.current.destroy();
 
-            chartInstanceRef.current = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: values,
-                        backgroundColor: colors,
-                        borderWidth: 0, hoverOffset: 4
-                    }]
-                },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 10 } } }, tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${Math.round(ctx.raw/10000)}萬` } } }
+                let labels = ['生活費', '房產支出', '子女養育', '車輛交通', '奉養父母', '婚姻'];
+                let values = [data.living, data.housing, data.children, data.car, data.parents, data.marriage];
+                let colors = ['#94a3b8', '#8b5cf6', '#f97316', '#0ea5e9', '#14b8a6', '#ec4899'];
+
+                if (customBreakdown && Object.keys(customBreakdown).length > 0) {
+                    const customKeys = Object.keys(customBreakdown);
+                    labels = [...labels, ...customKeys];
+                    values = [...values, ...customKeys.map(k => customBreakdown[k])];
+                    const customColors = customKeys.map((_, i) => `hsl(${140 + i * 20}, 70%, ${40 + (i % 3) * 10}%)`);
+                    colors = [...colors, ...customColors];
+                } else if (data.customTotal > 0) {
+                    labels.push('自訂支出');
+                    values.push(data.customTotal);
+                    colors.push('#10b981');
                 }
-            });
-            return () => { if (chartInstanceRef.current) chartInstanceRef.current.destroy(); };
-        }, [data, customBreakdown]);
-        return <canvas ref={chartRef} />;
-    };
 
-    const FinanceChart = ({ mainSimulation, comparisonSimulations }) => {
-        const chartRef = useRef(null);
-        const chartInstanceRef = useRef(null);
-        useEffect(() => {
-            const ctx = chartRef.current.getContext('2d');
-            if (chartInstanceRef.current) chartInstanceRef.current.destroy();
-            const datasets = [
-                {
-                    label: '目前設定', data: mainSimulation.dataPoints,
-                    borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                    borderWidth: 3, pointRadius: 0, pointHoverRadius: 6, fill: true, tension: 0.3
-                },
-                ...comparisonSimulations.map((sim, idx) => ({
-                    label: sim.name, data: sim.result.dataPoints,
-                    borderColor: ['#64748b', '#ef4444', '#10b981', '#f59e0b'][idx % 4],
-                    borderWidth: 2, borderDash: [5, 5], pointRadius: 0, fill: false, tension: 0.3
-                }))
+                chartInstanceRef.current = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: values,
+                            backgroundColor: colors,
+                            borderWidth: 0, hoverOffset: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 10 } } }, tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${Math.round(ctx.raw / 10000)}萬` } } }
+                    }
+                });
+                return () => { if (chartInstanceRef.current) chartInstanceRef.current.destroy(); };
+            }, [data, customBreakdown]);
+            return <canvas ref={chartRef} />;
+        };
+
+        const FinanceChart = ({ mainSimulation, comparisonSimulations }) => {
+            const chartRef = useRef(null);
+            const chartInstanceRef = useRef(null);
+            useEffect(() => {
+                const ctx = chartRef.current.getContext('2d');
+                if (chartInstanceRef.current) chartInstanceRef.current.destroy();
+                const datasets = [
+                    {
+                        label: '目前設定', data: mainSimulation.dataPoints,
+                        borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                        borderWidth: 3, pointRadius: 0, pointHoverRadius: 6, fill: true, tension: 0.3
+                    },
+                    ...comparisonSimulations.map((sim, idx) => ({
+                        label: sim.name, data: sim.result.dataPoints,
+                        borderColor: ['#64748b', '#ef4444', '#10b981', '#f59e0b'][idx % 4],
+                        borderWidth: 2, borderDash: [5, 5], pointRadius: 0, fill: false, tension: 0.3
+                    }))
+                ];
+                chartInstanceRef.current = new Chart(ctx, {
+                    type: 'line', data: { labels: mainSimulation.labels, datasets: datasets },
+                    options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: true, position: 'top' } }, scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } }, y: { grid: { borderDash: [4, 4], color: '#e2e8f0' } } } }
+                });
+                return () => { if (chartInstanceRef.current) chartInstanceRef.current.destroy(); };
+            }, [mainSimulation, comparisonSimulations]);
+            return <canvas ref={chartRef} />;
+        };
+
+        const App = () => {
+            const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+            const [openSections, setOpenSections] = useState({ file: true, basic: true, income: true, expense: true, house: true, passive: false, parents: true, marriage: false, child: true, car: true, custom: false });
+            const toggleSection = (key) => setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
+            const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+            const [savedScenarios, setSavedScenarios] = useState([]);
+            const [saveName, setSaveName] = useState('');
+            const [compareTargets, setCompareTargets] = useState([]);
+            const fileInputRef = useRef(null);
+
+            useEffect(() => { const saves = localStorage.getItem('life_sim_saves'); if (saves) setSavedScenarios(JSON.parse(saves)); }, []);
+            const handleSave = () => {
+                if (!saveName.trim()) return;
+                const currentData = { params, dailyItems, properties, cars, childrenList, passiveIncomes, customExpenses, useDailyDetail };
+                const newSave = { id: Date.now(), name: saveName, date: new Date().toLocaleString(), data: currentData };
+                const newSaves = [...savedScenarios, newSave];
+                setSavedScenarios(newSaves);
+                localStorage.setItem('life_sim_saves', JSON.stringify(newSaves));
+                setSaveName('');
+            };
+            const handleLoad = (saveId) => {
+                const target = savedScenarios.find(s => s.id === parseInt(saveId));
+                if (target) {
+                    const d = target.data;
+                    setParams(d.params); setDailyItems(d.dailyItems); setProperties(d.properties); setCars(d.cars);
+                    setChildrenList(d.childrenList); setPassiveIncomes(d.passiveIncomes); setCustomExpenses(d.customExpenses);
+                    setUseDailyDetail(d.useDailyDetail);
+                }
+            };
+            const handleDelete = (saveId) => {
+                const newSaves = savedScenarios.filter(s => s.id !== saveId);
+                setSavedScenarios(newSaves);
+                localStorage.setItem('life_sim_saves', JSON.stringify(newSaves));
+                setCompareTargets(compareTargets.filter(id => id !== saveId));
+            };
+            const toggleCompare = (saveId) => { if (compareTargets.includes(saveId)) setCompareTargets(compareTargets.filter(id => id !== saveId)); else setCompareTargets([...compareTargets, saveId]); };
+            const handleExportFile = () => {
+                const dataStr = JSON.stringify(savedScenarios, null, 2);
+                const blob = new Blob([dataStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `taiwan_life_sim_backup_${new Date().toISOString().slice(0, 10)}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+            const handleImportFile = (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const json = JSON.parse(e.target.result);
+                        if (Array.isArray(json)) {
+                            setSavedScenarios(json);
+                            localStorage.setItem('life_sim_saves', JSON.stringify(json));
+                            alert('匯入成功！已還原所有存檔。');
+                        } else { alert('檔案格式錯誤：必須是存檔陣列。'); }
+                    } catch (err) { alert('無法讀取檔案，請確認格式。'); }
+                };
+                reader.readAsText(file);
+                event.target.value = '';
+            };
+
+            const [params, setParams] = useState({
+                currentAge: 25, lifeExpectancy: 85, retireAge: 65, currentAssets: 50,
+                monthlyIncome: 4.5, bonusMonths: 1.5, incomeGrowth: 2.0,
+                enableLivingExpense: true, monthlyExpense: 2.0, inflationRate: 2.0, investReturn: 5.0,
+                hasMarriage: true, marriageAge: 32, marriageCost: 80,
+                hasParents: true, parentsStartAge: 25, parentsEndAge: 60, parentsMonthlyCost: 1.0,
+                emergencyFundMonths: 6 // 新增預備金月數預設值
+            });
+
+            const [useDailyDetail, setUseDailyDetail] = useState(false);
+            const [dailyItems, setDailyItems] = useState([
+                { id: 1, name: '早餐', cost: 50 }, { id: 2, name: '午餐', cost: 120 }, { id: 3, name: '晚餐', cost: 150 },
+                { id: 4, name: '交通', cost: 60 }, { id: 5, name: '飲料/點心', cost: 50 }
+            ]);
+            const dailyTotal = dailyItems.reduce((acc, i) => acc + (parseInt(i.cost) || 0), 0);
+            useEffect(() => { if (useDailyDetail) setParams(prev => ({ ...prev, monthlyExpense: parseFloat(((dailyTotal * 30) / 10000).toFixed(2)) })); }, [useDailyDetail, dailyTotal]);
+
+            const [properties, setProperties] = useState([{ id: 1, name: '自住房', buyAge: 36, price: 1600, downPayment: 20, loanTerm: 30, rate: 2.2 }]);
+            const [newProperty, setNewProperty] = useState({ name: '', buyAge: 36, price: '', downPayment: 20, loanTerm: 30, rate: 2.2 });
+
+            // 建議購屋預算與適合購屋年齡計算
+            const suggestedHousePrice = useMemo(() => {
+                const maxAffordableMonthlyPayment = params.monthlyIncome * 10000 * 0.33;
+                const r = (newProperty.rate / 100) / 12;
+                const n = newProperty.loanTerm * 12;
+                let maxLoan = r > 0 ? maxAffordableMonthlyPayment * (Math.pow(1 + r, n) - 1) / (r * Math.pow(1 + r, n)) : maxAffordableMonthlyPayment * n;
+                return Math.round((maxLoan / (1 - newProperty.downPayment / 100)) / 10000);
+            }, [params.monthlyIncome, newProperty.rate, newProperty.loanTerm, newProperty.downPayment]);
+
+            const suitableBuyAge = useMemo(() => {
+                let assets = params.currentAssets * 10000;
+                // 修正：現在使用使用者當前輸入的價格 (newProperty.price) 來計算
+                // 如果輸入框是空的，就用 0 (避免 NaN)
+                const targetPrice = parseFloat(newProperty.price) || 0;
+                const downPayment = targetPrice * 10000 * (newProperty.downPayment / 100);
+
+                // 簡易估算每年的儲蓄 (年收入 - 年支出)
+                const annualIncome = params.monthlyIncome * 10000 * (12 + params.bonusMonths);
+                const annualExpense = params.monthlyExpense * 10000 * 12;
+                const annualSave = annualIncome - annualExpense;
+
+                if (annualSave <= 0 && assets < downPayment) return null; // 存不到錢且目前資產不足
+
+                let age = params.currentAge;
+                // 模擬直到存到頭期款
+                while (age < 80) {
+                    if (assets >= downPayment) return age;
+                    assets += annualSave;
+                    assets *= (1 + params.investReturn / 100); // 簡單複利
+                    age++;
+                }
+                return null;
+            }, [params, newProperty.price, newProperty.downPayment]); // 依賴項改為 newProperty.price
+
+            // 初始化 newProperty 的 price 為建議房價 (僅在 component mount 時執行一次)
+            useEffect(() => {
+                setNewProperty(prev => ({ ...prev, price: suggestedHousePrice }));
+            }, []); // Empty dependency array, run once on mount
+
+            const addProperty = () => {
+                if (!newProperty.name || !newProperty.price) return;
+                // 修正：允許小數點輸入，從 parseInt 改為 parseFloat
+                setProperties([...properties, { ...newProperty, id: Date.now(), price: parseFloat(newProperty.price) }]);
+                setNewProperty({ name: '', buyAge: suitableBuyAge || 36, price: suggestedHousePrice, downPayment: 20, loanTerm: 30, rate: 2.2 });
+            };
+            const removeProperty = (id) => setProperties(properties.filter(p => p.id !== id));
+
+            const [cars, setCars] = useState([{ id: 1, name: '第一台車', buyAge: 30, price: 90, downPayment: 30, loanTerm: 5, rate: 3.5 }]);
+            const [newCar, setNewCar] = useState({ name: '', buyAge: 30, price: '', downPayment: 30, loanTerm: 5, rate: 3.5 });
+            const addCar = () => {
+                if (!newCar.name || !newCar.price) return;
+                // 修正：允許小數點輸入，從 parseInt 改為 parseFloat
+                setCars([...cars, { ...newCar, id: Date.now(), price: parseFloat(newCar.price) }]);
+                setNewCar({ name: '', buyAge: 30, price: '', downPayment: 30, loanTerm: 5, rate: 3.5 });
+            };
+            const removeCar = (id) => setCars(cars.filter(c => c.id !== id));
+            const updateCar = (id, field, value) => setCars(cars.map(c => c.id === id ? { ...c, [field]: value } : c));
+
+            const DEFAULT_CHILD_STAGES = [
+                { id: 1, name: '嬰兒期', duration: 3, cost: 0.5 }, { id: 2, name: '幼兒園', duration: 3, cost: 1.5 },
+                { id: 3, name: '小學', duration: 6, cost: 1.5 }, { id: 4, name: '國高中', duration: 6, cost: 2.0 }, { id: 5, name: '大學', duration: 4, cost: 2.5 }, { id: 6, name: '碩士', duration: 2, cost: 0 }, { id: 7, name: '博士', duration: 4, cost: 0 }
             ];
-            chartInstanceRef.current = new Chart(ctx, {
-                type: 'line', data: { labels: mainSimulation.labels, datasets: datasets },
-                options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: true, position: 'top' } }, scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } }, y: { grid: { borderDash: [4, 4], color: '#e2e8f0' } } } }
-            });
-            return () => { if (chartInstanceRef.current) chartInstanceRef.current.destroy(); };
-        }, [mainSimulation, comparisonSimulations]);
-        return <canvas ref={chartRef} />;
-    };
+            const [childrenList, setChildrenList] = useState([{ id: 1, name: '第一胎', birthAge: 34, stages: JSON.parse(JSON.stringify(DEFAULT_CHILD_STAGES)) }]);
+            const [newChild, setNewChild] = useState({ name: '', birthAge: 34 });
+            const addChild = () => { setChildrenList([...childrenList, { id: Date.now(), name: newChild.name || `第${childrenList.length + 1}胎`, birthAge: newChild.birthAge, stages: JSON.parse(JSON.stringify(DEFAULT_CHILD_STAGES)) }]); setNewChild({ name: '', birthAge: newChild.birthAge + 2 }); };
+            const removeChild = (id) => setChildrenList(childrenList.filter(c => c.id !== id));
+            const updateChildStage = (cId, sId, field, val) => setChildrenList(childrenList.map(c => c.id === cId ? { ...c, stages: c.stages.map(s => s.id === sId ? { ...s, [field]: val } : s) } : c));
 
-    const App = () => {
-        const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-        const [openSections, setOpenSections] = useState({ file: true, basic: true, income: true, expense: true, house: true, passive: false, parents: true, marriage: false, child: true, car: true, custom: false });
-        const toggleSection = (key) => setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
-        const [isAIModalOpen, setIsAIModalOpen] = useState(false);
-        const [savedScenarios, setSavedScenarios] = useState([]);
-        const [saveName, setSaveName] = useState('');
-        const [compareTargets, setCompareTargets] = useState([]);
-        const fileInputRef = useRef(null);
-
-        useEffect(() => { const saves = localStorage.getItem('life_sim_saves'); if (saves) setSavedScenarios(JSON.parse(saves)); }, []);
-        const handleSave = () => {
-            if (!saveName.trim()) return;
-            const currentData = { params, dailyItems, properties, cars, childrenList, passiveIncomes, customExpenses, useDailyDetail };
-            const newSave = { id: Date.now(), name: saveName, date: new Date().toLocaleString(), data: currentData };
-            const newSaves = [...savedScenarios, newSave];
-            setSavedScenarios(newSaves);
-            localStorage.setItem('life_sim_saves', JSON.stringify(newSaves));
-            setSaveName('');
-        };
-        const handleLoad = (saveId) => {
-            const target = savedScenarios.find(s => s.id === parseInt(saveId));
-            if (target) {
-                const d = target.data;
-                setParams(d.params); setDailyItems(d.dailyItems); setProperties(d.properties); setCars(d.cars);
-                setChildrenList(d.childrenList); setPassiveIncomes(d.passiveIncomes); setCustomExpenses(d.customExpenses);
-                setUseDailyDetail(d.useDailyDetail);
-            }
-        };
-        const handleDelete = (saveId) => {
-            const newSaves = savedScenarios.filter(s => s.id !== saveId);
-            setSavedScenarios(newSaves);
-            localStorage.setItem('life_sim_saves', JSON.stringify(newSaves));
-            setCompareTargets(compareTargets.filter(id => id !== saveId));
-        };
-        const toggleCompare = (saveId) => { if (compareTargets.includes(saveId)) setCompareTargets(compareTargets.filter(id => id !== saveId)); else setCompareTargets([...compareTargets, saveId]); };
-        const handleExportFile = () => {
-            const dataStr = JSON.stringify(savedScenarios, null, 2);
-            const blob = new Blob([dataStr], { type: "application/json" });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `taiwan_life_sim_backup_${new Date().toISOString().slice(0,10)}.json`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        };
-        const handleImportFile = (event) => {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    const json = JSON.parse(e.target.result);
-                    if (Array.isArray(json)) {
-                        setSavedScenarios(json);
-                        localStorage.setItem('life_sim_saves', JSON.stringify(json));
-                        alert('匯入成功！已還原所有存檔。');
-                    } else { alert('檔案格式錯誤：必須是存檔陣列。'); }
-                } catch (err) { alert('無法讀取檔案，請確認格式。'); }
+            const [passiveIncomes, setPassiveIncomes] = useState([]);
+            const [newPassive, setNewPassive] = useState({ name: '', amount: '', frequency: 'monthly', startAge: '', endAge: '' });
+            const addPassiveIncome = () => {
+                if (!newPassive.name || !newPassive.amount) return;
+                // 修正：允許小數點輸入，從 parseInt 改為 parseFloat
+                setPassiveIncomes([...passiveIncomes, { ...newPassive, amount: parseFloat(newPassive.amount), startAge: parseInt(newPassive.startAge), endAge: parseInt(newPassive.endAge || 85), id: Date.now() }]);
+                setNewPassive({ name: '', amount: '', frequency: 'monthly', startAge: '', endAge: '' });
             };
-            reader.readAsText(file);
-            event.target.value = ''; 
-        };
+            const removePassiveIncome = (id) => setPassiveIncomes(passiveIncomes.filter(p => p.id !== id));
 
-        const [params, setParams] = useState({
-            currentAge: 25, lifeExpectancy: 85, retireAge: 65, currentAssets: 50, 
-            monthlyIncome: 4.5, bonusMonths: 1.5, incomeGrowth: 2.0,
-            enableLivingExpense: true, monthlyExpense: 2.0, inflationRate: 2.0, investReturn: 5.0, 
-            hasMarriage: true, marriageAge: 32, marriageCost: 80, 
-            hasParents: true, parentsStartAge: 25, parentsEndAge: 60, parentsMonthlyCost: 1.0,
-            emergencyFundMonths: 6 // 新增預備金月數預設值
-        });
-
-        const [useDailyDetail, setUseDailyDetail] = useState(false);
-        const [dailyItems, setDailyItems] = useState([
-            { id: 1, name: '早餐', cost: 50 }, { id: 2, name: '午餐', cost: 120 }, { id: 3, name: '晚餐', cost: 150 },
-            { id: 4, name: '交通', cost: 60 }, { id: 5, name: '飲料/點心', cost: 50 }
-        ]);
-        const dailyTotal = dailyItems.reduce((acc, i) => acc + (parseInt(i.cost)||0), 0);
-        useEffect(() => { if (useDailyDetail) setParams(prev => ({ ...prev, monthlyExpense: parseFloat(((dailyTotal * 30)/10000).toFixed(2)) })); }, [useDailyDetail, dailyTotal]);
-
-        const [properties, setProperties] = useState([{ id: 1, name: '自住房', buyAge: 36, price: 1600, downPayment: 20, loanTerm: 30, rate: 2.2 }]);
-        const [newProperty, setNewProperty] = useState({ name: '', buyAge: 36, price: '', downPayment: 20, loanTerm: 30, rate: 2.2 });
-        
-        // 建議購屋預算與適合購屋年齡計算
-        const suggestedHousePrice = useMemo(() => {
-            const maxAffordableMonthlyPayment = params.monthlyIncome * 10000 * 0.33;
-            const r = (newProperty.rate / 100) / 12;
-            const n = newProperty.loanTerm * 12;
-            let maxLoan = r > 0 ? maxAffordableMonthlyPayment * (Math.pow(1 + r, n) - 1) / (r * Math.pow(1 + r, n)) : maxAffordableMonthlyPayment * n;
-            return Math.round((maxLoan / (1 - newProperty.downPayment / 100)) / 10000);
-        }, [params.monthlyIncome, newProperty.rate, newProperty.loanTerm, newProperty.downPayment]);
-
-        const suitableBuyAge = useMemo(() => {
-            let assets = params.currentAssets * 10000;
-            // 修正：現在使用使用者當前輸入的價格 (newProperty.price) 來計算
-            // 如果輸入框是空的，就用 0 (避免 NaN)
-            const targetPrice = parseFloat(newProperty.price) || 0;
-            const downPayment = targetPrice * 10000 * (newProperty.downPayment / 100);
-            
-            // 簡易估算每年的儲蓄 (年收入 - 年支出)
-            const annualIncome = params.monthlyIncome * 10000 * (12 + params.bonusMonths);
-            const annualExpense = params.monthlyExpense * 10000 * 12;
-            const annualSave = annualIncome - annualExpense;
-
-            if (annualSave <= 0 && assets < downPayment) return null; // 存不到錢且目前資產不足
-
-            let age = params.currentAge;
-            // 模擬直到存到頭期款
-            while (age < 80) {
-                 if (assets >= downPayment) return age;
-                 assets += annualSave;
-                 assets *= (1 + params.investReturn/100); // 簡單複利
-                 age++;
-            }
-            return null;
-        }, [params, newProperty.price, newProperty.downPayment]); // 依賴項改為 newProperty.price
-
-        // 初始化 newProperty 的 price 為建議房價 (僅在 component mount 時執行一次)
-        useEffect(() => {
-             setNewProperty(prev => ({ ...prev, price: suggestedHousePrice }));
-        }, []); // Empty dependency array, run once on mount
-
-        const addProperty = () => { 
-            if (!newProperty.name || !newProperty.price) return; 
-            // 修正：允許小數點輸入，從 parseInt 改為 parseFloat
-            setProperties([...properties, { ...newProperty, id: Date.now(), price: parseFloat(newProperty.price) }]); 
-            setNewProperty({ name: '', buyAge: suitableBuyAge || 36, price: suggestedHousePrice, downPayment: 20, loanTerm: 30, rate: 2.2 }); 
-        };
-        const removeProperty = (id) => setProperties(properties.filter(p => p.id !== id));
-
-        const [cars, setCars] = useState([{ id: 1, name: '第一台車', buyAge: 30, price: 90, downPayment: 30, loanTerm: 5, rate: 3.5 }]);
-        const [newCar, setNewCar] = useState({ name: '', buyAge: 30, price: '', downPayment: 30, loanTerm: 5, rate: 3.5 });
-        const addCar = () => { 
-            if (!newCar.name || !newCar.price) return; 
-            // 修正：允許小數點輸入，從 parseInt 改為 parseFloat
-            setCars([...cars, { ...newCar, id: Date.now(), price: parseFloat(newCar.price) }]); 
-            setNewCar({ name: '', buyAge: 30, price: '', downPayment: 30, loanTerm: 5, rate: 3.5 }); 
-        };
-        const removeCar = (id) => setCars(cars.filter(c => c.id !== id));
-        const updateCar = (id, field, value) => setCars(cars.map(c => c.id === id ? { ...c, [field]: value } : c));
-
-        const DEFAULT_CHILD_STAGES = [
-            { id: 1, name: '嬰兒期', duration: 3, cost: 3.5 }, { id: 2, name: '幼兒園', duration: 3, cost: 2.5 },
-            { id: 3, name: '小學', duration: 6, cost: 1.5 }, { id: 4, name: '國高中', duration: 6, cost: 2.0 }, { id: 5, name: '大學', duration: 4, cost: 2.5 }
-        ];
-        const [childrenList, setChildrenList] = useState([{ id: 1, name: '第一胎', birthAge: 34, stages: JSON.parse(JSON.stringify(DEFAULT_CHILD_STAGES)) }]);
-        const [newChild, setNewChild] = useState({ name: '', birthAge: 34 });
-        const addChild = () => { setChildrenList([...childrenList, { id: Date.now(), name: newChild.name || `第${childrenList.length+1}胎`, birthAge: newChild.birthAge, stages: JSON.parse(JSON.stringify(DEFAULT_CHILD_STAGES)) }]); setNewChild({ name: '', birthAge: newChild.birthAge + 2 }); };
-        const removeChild = (id) => setChildrenList(childrenList.filter(c => c.id !== id));
-        const updateChildStage = (cId, sId, field, val) => setChildrenList(childrenList.map(c => c.id === cId ? { ...c, stages: c.stages.map(s => s.id === sId ? { ...s, [field]: val } : s) } : c));
-
-        const [passiveIncomes, setPassiveIncomes] = useState([]);
-        const [newPassive, setNewPassive] = useState({ name: '', amount: '', frequency: 'monthly', startAge: '', endAge: '' });
-        const addPassiveIncome = () => { 
-            if (!newPassive.name || !newPassive.amount) return; 
-            // 修正：允許小數點輸入，從 parseInt 改為 parseFloat
-            setPassiveIncomes([...passiveIncomes, { ...newPassive, amount: parseFloat(newPassive.amount), startAge: parseInt(newPassive.startAge), endAge: parseInt(newPassive.endAge || 85), id: Date.now() }]); 
-            setNewPassive({ name: '', amount: '', frequency: 'monthly', startAge: '', endAge: '' }); 
-        };
-        const removePassiveIncome = (id) => setPassiveIncomes(passiveIncomes.filter(p => p.id !== id));
-
-        const [customExpenses, setCustomExpenses] = useState([]);
-        const [newCustomExp, setNewCustomExp] = useState({ name: '', amount: '', frequency: 'once', startAge: '', endAge: '' }); 
-        const addCustomExpense = () => { 
-            if (!newCustomExp.name || !newCustomExp.amount) return; 
-            // 修正：允許小數點輸入，從 parseInt 改為 parseFloat
-            setCustomExpenses([...customExpenses, { ...newCustomExp, startAge: parseInt(newCustomExp.startAge), endAge: parseInt(newCustomExp.frequency === 'once' ? newCustomExp.startAge : newCustomExp.endAge), amount: parseFloat(newCustomExp.amount), id: Date.now() }]); 
-            setNewCustomExp({ name: '', amount: '', frequency: 'once', startAge: '', endAge: '' }); 
-        };
-        const removeCustomExpense = (id) => setCustomExpenses(customExpenses.filter(e => e.id !== id));
-        const updateCustomExpense = (id, field, value) => {
-            setCustomExpenses(customExpenses.map(item => item.id === id ? { ...item, [field]: value } : item));
-        };
-
-        const simulation = useMemo(() => coreSimulation({ params, properties, cars, childrenList, passiveIncomes, customExpenses }), [params, properties, cars, childrenList, passiveIncomes, customExpenses]);
-        const comparisonSimulations = useMemo(() => compareTargets.map(id => { const save = savedScenarios.find(s => s.id === id); if (!save) return null; return { name: save.name, result: coreSimulation(save.data) }; }).filter(Boolean), [compareTargets, savedScenarios]);
-        
-        const safeRetireAge = useMemo(() => {
-            for (let age = params.currentAge; age <= params.lifeExpectancy; age++) {
-                const tempParams = { ...params, retireAge: age };
-                const res = coreSimulation({ params: tempParams, properties, cars, childrenList, passiveIncomes, customExpenses });
-                if (res.finalRealAssets >= 0 && (!res.bankruptAge || res.bankruptAge > params.lifeExpectancy)) return age;
-            }
-            return null;
-        }, [params, properties, cars, childrenList, passiveIncomes, customExpenses]);
-
-        const dailyStats = useMemo(() => {
-            const annualSalary = params.monthlyIncome * 10000 * (12 + params.bonusMonths);
-            let annualPassive = 0;
-            passiveIncomes.forEach(pi => {
-                let annual = 0;
-                if (pi.frequency === 'daily') annual = pi.amount * 365;
-                else if (pi.frequency === 'monthly') annual = pi.amount * 12;
-                else if (pi.frequency === 'quarterly') annual = pi.amount * 4;
-                else annual = pi.amount;
-                annualPassive += annual;
-            });
-            const annualLiving = params.enableLivingExpense ? params.monthlyExpense * 10000 * 12 : 0;
-            const annualParents = params.hasParents ? params.parentsMonthlyCost * 10000 * 12 : 0;
-            let annualHousing = 0; 
-            properties.forEach(p => { 
-                const { monthly } = calculateLoan(p.price, p.downPayment, p.loanTerm, p.rate);
-                annualHousing += monthly * 12; 
-            });
-            let annualCar = 0; 
-            cars.forEach(c => { 
-                const { monthly } = calculateLoan(c.price, c.downPayment, c.loanTerm, c.rate);
-                annualCar += monthly * 12; 
-            });
-            let annualChild = 0; 
-            childrenList.forEach(child => { 
-                const age = params.currentAge - child.birthAge; 
-                if (age>=0) { 
-                    let sStart=0; 
-                    for(let s of child.stages) { 
-                        if(age>=sStart && age<sStart+s.duration) { 
-                            annualChild += s.cost * 10000 * 12; 
-                            break; 
-                        } 
-                        sStart+=s.duration; 
-                    } 
-                } 
-            });
-
-            // --- 新增：處理自訂支出的細項 ---
-            let annualCustomTotal = 0;
-            const customBreakdownItems = [];
-            customExpenses.forEach(exp => {
-                let annual = 0;
-                const end = exp.endAge || 85;
-                // 檢查目前年齡是否在支出區間內
-                if (params.currentAge >= exp.startAge && params.currentAge <= end) {
-                    if (exp.frequency === 'weekly') annual = exp.amount * 10000 * 52;
-                    else if (exp.frequency === 'monthly') annual = exp.amount * 10000 * 12;
-                    else if (exp.frequency === 'yearly') annual = exp.amount * 10000;
-                    else if (exp.frequency === 'once' && params.currentAge === exp.startAge) annual = exp.amount * 10000;
-                }
-                
-                if (annual > 0) {
-                    annualCustomTotal += annual;
-                    customBreakdownItems.push({ label: exp.name || '自訂支出', type: 'exp', val: annual });
-                }
-            });
-            // -------------------------------
-
-            const totalIncomeAnnual = annualSalary + annualPassive;
-            const totalExpenseAnnual = annualLiving + annualHousing + annualParents + annualCar + annualChild + annualCustomTotal;
-
-            const breakdown = [
-                { label: '工作年薪', type: 'inc', val: annualSalary },
-                { label: '被動收入', type: 'inc', val: annualPassive },
-                { label: '基本生活', type: 'exp', val: annualLiving },
-                { label: '房產支出', type: 'exp', val: annualHousing },
-                { label: '子女養育', type: 'exp', val: annualChild },
-                { label: '車輛交通', type: 'exp', val: annualCar },
-                { label: '孝親費', type: 'exp', val: annualParents },
-                ...customBreakdownItems // 將自訂細項展開加入列表
-            ].filter(i => i.val > 0).map(i => ({
-                ...i,
-                daily: Math.round(i.val / 365),
-                monthly: Math.round(i.val / 12),
-                yearly: Math.round(i.val)
-            }));
-            return {
-                income: Math.round(totalIncomeAnnual / 365),
-                expense: Math.round(totalExpenseAnnual / 365),
-                breakdown: breakdown,
-                details: { 
-                    totalIncome: { daily: Math.round(totalIncomeAnnual/365), monthly: Math.round(totalIncomeAnnual/12), yearly: Math.round(totalIncomeAnnual) },
-                    totalExpense: { daily: Math.round(totalExpenseAnnual/365), monthly: Math.round(totalExpenseAnnual/12), yearly: Math.round(totalExpenseAnnual) }
-                }
+            const [customExpenses, setCustomExpenses] = useState([]);
+            const [newCustomExp, setNewCustomExp] = useState({ name: '', amount: '', frequency: 'once', startAge: '', endAge: '' });
+            const addCustomExpense = () => {
+                if (!newCustomExp.name || !newCustomExp.amount) return;
+                // 修正：允許小數點輸入，從 parseInt 改為 parseFloat
+                setCustomExpenses([...customExpenses, { ...newCustomExp, startAge: parseInt(newCustomExp.startAge), endAge: parseInt(newCustomExp.frequency === 'once' ? newCustomExp.startAge : newCustomExp.endAge), amount: parseFloat(newCustomExp.amount), id: Date.now() }]);
+                setNewCustomExp({ name: '', amount: '', frequency: 'once', startAge: '', endAge: '' });
             };
-        }, [params, properties, cars, childrenList, passiveIncomes, customExpenses]);
+            const removeCustomExpense = (id) => setCustomExpenses(customExpenses.filter(e => e.id !== id));
+            const updateCustomExpense = (id, field, value) => {
+                setCustomExpenses(customExpenses.map(item => item.id === id ? { ...item, [field]: value } : item));
+            };
 
-        const [showDetailTable, setShowDetailTable] = useState(false);
+            const simulation = useMemo(() => coreSimulation({ params, properties, cars, childrenList, passiveIncomes, customExpenses }), [params, properties, cars, childrenList, passiveIncomes, customExpenses]);
+            const comparisonSimulations = useMemo(() => compareTargets.map(id => { const save = savedScenarios.find(s => s.id === id); if (!save) return null; return { name: save.name, result: coreSimulation(save.data) }; }).filter(Boolean), [compareTargets, savedScenarios]);
 
-        return (
-            <div className="flex flex-col min-h-screen bg-slate-100">
-                <header className="bg-white border-b px-4 py-3 sticky top-0 z-30 shadow-sm flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                        <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 bg-slate-100 rounded hover:bg-slate-200 text-slate-600"><i className={`ph-bold ${isSidebarOpen ? 'ph-caret-left' : 'ph-list'}`}></i></button>
-                        <h1 className="font-bold text-lg text-slate-800 flex items-center gap-2"><i className="ph-fill ph-trend-up text-blue-600"></i><span className="hidden sm:inline">人生財務模擬 v7.4.1</span></h1>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <button onClick={() => setIsAIModalOpen(true)} className="hidden md:flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-blue-500 text-white rounded-full font-bold shadow-md hover:scale-105 transition-transform ai-pulse"><i className="ph-fill ph-sparkle"></i> AI 財務顧問診斷</button>
-                        <div className="text-right flex flex-col items-end"><span className="text-[10px] text-slate-400 uppercase font-bold">85歲 實質資產</span><span className={`text-xl font-black ${simulation.finalRealAssets >= 0 ? 'text-blue-600' : 'text-red-500'}`}>{new Intl.NumberFormat().format(Math.round(simulation.finalRealAssets/10000))} 萬</span></div>
-                    </div>
-                </header>
+            const safeRetireAge = useMemo(() => {
+                for (let age = params.currentAge; age <= params.lifeExpectancy; age++) {
+                    const tempParams = { ...params, retireAge: age };
+                    const res = coreSimulation({ params: tempParams, properties, cars, childrenList, passiveIncomes, customExpenses });
+                    if (res.finalRealAssets >= 0 && (!res.bankruptAge || res.bankruptAge > params.lifeExpectancy)) return age;
+                }
+                return null;
+            }, [params, properties, cars, childrenList, passiveIncomes, customExpenses]);
 
-                <AIAdvisorModal isOpen={isAIModalOpen} onClose={() => setIsAIModalOpen(false)} data={{ params, properties, cars, childrenList, passiveIncomes, customExpenses }} simulationResult={simulation} />
+            const dailyStats = useMemo(() => {
+                const annualSalary = params.monthlyIncome * 10000 * (12 + params.bonusMonths);
+                let annualPassive = 0;
+                passiveIncomes.forEach(pi => {
+                    let annual = 0;
+                    if (pi.frequency === 'daily') annual = pi.amount * 365;
+                    else if (pi.frequency === 'monthly') annual = pi.amount * 12;
+                    else if (pi.frequency === 'quarterly') annual = pi.amount * 4;
+                    else annual = pi.amount;
+                    annualPassive += annual;
+                });
+                const annualLiving = params.enableLivingExpense ? params.monthlyExpense * 10000 * 12 : 0;
+                const annualParents = params.hasParents ? params.parentsMonthlyCost * 10000 * 12 : 0;
+                let annualHousing = 0;
+                properties.forEach(p => {
+                    const { monthly } = calculateLoan(p.price, p.downPayment, p.loanTerm, p.rate);
+                    annualHousing += monthly * 12;
+                });
+                let annualCar = 0;
+                cars.forEach(c => {
+                    const { monthly } = calculateLoan(c.price, c.downPayment, c.loanTerm, c.rate);
+                    annualCar += monthly * 12;
+                });
+                let annualChild = 0;
+                childrenList.forEach(child => {
+                    const age = params.currentAge - child.birthAge;
+                    if (age >= 0) {
+                        let sStart = 0;
+                        for (let s of child.stages) {
+                            if (age >= sStart && age < sStart + s.duration) {
+                                annualChild += s.cost * 10000 * 12;
+                                break;
+                            }
+                            sStart += s.duration;
+                        }
+                    }
+                });
 
-                <div className="flex flex-col lg:flex-row flex-1 relative">
-                    <div className={`transition-all duration-300 ease-in-out bg-white border-r z-20 ${isSidebarOpen ? 'w-full lg:w-[480px] opacity-100' : 'w-0 lg:w-0 opacity-0 overflow-hidden'} flex flex-col lg:h-[calc(100vh-64px)] lg:sticky lg:top-[64px]`}>
-                        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                            <CollapsibleSection title="檔案管理 (存檔/匯出/匯入)" icon="💾" isOpen={openSections.file} onToggle={() => toggleSection('file')} colorClass="bg-slate-100" headerClass="text-slate-800">
-                                <div className="space-y-3">
-                                    <div className="flex gap-2"><IMEInput placeholder="輸入存檔名稱" value={saveName} onChange={e => setSaveName(e.target.value)} className="w-full px-2 py-2 border rounded text-sm"/><button onClick={handleSave} disabled={!saveName} className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-bold disabled:opacity-50 whitespace-nowrap">儲存</button></div>
-                                    <div className="flex gap-2"><button onClick={handleExportFile} className="flex-1 py-2 bg-white border border-slate-300 rounded text-sm text-slate-700 hover:bg-slate-50 flex items-center justify-center gap-1"><i className="ph-bold ph-download-simple"></i> 下載備份</button><button onClick={() => fileInputRef.current.click()} className="flex-1 py-2 bg-white border border-slate-300 rounded text-sm text-slate-700 hover:bg-slate-50 flex items-center justify-center gap-1"><i className="ph-bold ph-upload-simple"></i> 匯入檔案</button><input type="file" accept=".json" ref={fileInputRef} onChange={handleImportFile} className="hidden" /></div>
-                                    {savedScenarios.length > 0 && (<div className="border-t border-slate-200 pt-2 space-y-2">{savedScenarios.map(save => (<div key={save.id} className="flex justify-between items-center bg-white p-2 rounded border border-slate-200 text-sm"><div className="flex items-center gap-2"><input type="checkbox" checked={compareTargets.includes(save.id)} onChange={() => toggleCompare(save.id)} className="w-4 h-4 accent-indigo-500" title="勾選加入圖表比較"/><div onClick={() => handleLoad(save.id)} className="cursor-pointer hover:text-blue-600"><div className="font-bold">{save.name}</div><div className="text-[10px] text-slate-400">{save.date}</div></div></div><div className="flex gap-1"><button onClick={() => handleLoad(save.id)} className="px-2 py-1 bg-slate-100 text-slate-600 rounded hover:bg-blue-50 hover:text-blue-600 text-xs">讀取</button><button onClick={() => handleDelete(save.id)} className="px-2 py-1 bg-slate-100 text-slate-600 rounded hover:bg-red-50 hover:text-red-600 text-xs">刪除</button></div></div>))}</div>)}
+                // --- 新增：處理自訂支出的細項 ---
+                let annualCustomTotal = 0;
+                const customBreakdownItems = [];
+                customExpenses.forEach(exp => {
+                    let annual = 0;
+                    const end = exp.endAge || 85;
+                    // 檢查目前年齡是否在支出區間內
+                    if (params.currentAge >= exp.startAge && params.currentAge <= end) {
+                        if (exp.frequency === 'weekly') annual = exp.amount * 10000 * 52;
+                        else if (exp.frequency === 'monthly') annual = exp.amount * 10000 * 12;
+                        else if (exp.frequency === 'yearly') annual = exp.amount * 10000;
+                        else if (exp.frequency === 'once' && params.currentAge === exp.startAge) annual = exp.amount * 10000;
+                    }
+
+                    if (annual > 0) {
+                        annualCustomTotal += annual;
+                        customBreakdownItems.push({ label: exp.name || '自訂支出', type: 'exp', val: annual });
+                    }
+                });
+                // -------------------------------
+
+                const totalIncomeAnnual = annualSalary + annualPassive;
+                const totalExpenseAnnual = annualLiving + annualHousing + annualParents + annualCar + annualChild + annualCustomTotal;
+
+                const breakdown = [
+                    { label: '工作年薪', type: 'inc', val: annualSalary },
+                    { label: '被動收入', type: 'inc', val: annualPassive },
+                    { label: '基本生活', type: 'exp', val: annualLiving },
+                    { label: '房產支出', type: 'exp', val: annualHousing },
+                    { label: '子女養育', type: 'exp', val: annualChild },
+                    { label: '車輛交通', type: 'exp', val: annualCar },
+                    { label: '孝親費', type: 'exp', val: annualParents },
+                    ...customBreakdownItems // 將自訂細項展開加入列表
+                ].filter(i => i.val > 0).map(i => ({
+                    ...i,
+                    daily: Math.round(i.val / 365),
+                    monthly: Math.round(i.val / 12),
+                    yearly: Math.round(i.val)
+                }));
+                return {
+                    income: Math.round(totalIncomeAnnual / 365),
+                    expense: Math.round(totalExpenseAnnual / 365),
+                    breakdown: breakdown,
+                    details: {
+                        totalIncome: { daily: Math.round(totalIncomeAnnual / 365), monthly: Math.round(totalIncomeAnnual / 12), yearly: Math.round(totalIncomeAnnual) },
+                        totalExpense: { daily: Math.round(totalExpenseAnnual / 365), monthly: Math.round(totalExpenseAnnual / 12), yearly: Math.round(totalExpenseAnnual) }
+                    }
+                };
+            }, [params, properties, cars, childrenList, passiveIncomes, customExpenses]);
+
+            const [showDetailTable, setShowDetailTable] = useState(false);
+
+            return (
+                <div className="flex flex-col min-h-screen bg-slate-100">
+                    <header className="bg-white border-b px-4 py-3 sticky top-0 z-30 shadow-sm flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 bg-slate-100 rounded hover:bg-slate-200 text-slate-600"><i className={`ph-bold ${isSidebarOpen ? 'ph-caret-left' : 'ph-list'}`}></i></button>
+                            <h1 className="font-bold text-lg text-slate-800 flex items-center gap-2"><i className="ph-fill ph-trend-up text-blue-600"></i><span className="hidden sm:inline">人生財務模擬 v7.4.1</span></h1>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <button onClick={() => setIsAIModalOpen(true)} className="hidden md:flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-blue-500 text-white rounded-full font-bold shadow-md hover:scale-105 transition-transform ai-pulse"><i className="ph-fill ph-sparkle"></i> AI 財務顧問診斷</button>
+                            <div className="text-right flex flex-col items-end"><span className="text-[10px] text-slate-400 uppercase font-bold">85歲 實質資產</span><span className={`text-xl font-black ${simulation.finalRealAssets >= 0 ? 'text-blue-600' : 'text-red-500'}`}>{new Intl.NumberFormat().format(Math.round(simulation.finalRealAssets / 10000))} 萬</span></div>
+                        </div>
+                    </header>
+
+                    <AIAdvisorModal isOpen={isAIModalOpen} onClose={() => setIsAIModalOpen(false)} data={{ params, properties, cars, childrenList, passiveIncomes, customExpenses }} simulationResult={simulation} />
+
+                    <div className="flex flex-col lg:flex-row flex-1 relative">
+                        <div className={`transition-all duration-300 ease-in-out bg-white border-r z-20 ${isSidebarOpen ? 'w-full lg:w-[480px] opacity-100' : 'w-0 lg:w-0 opacity-0 overflow-hidden'} flex flex-col lg:h-[calc(100vh-64px)] lg:sticky lg:top-[64px]`}>
+                            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                                <CollapsibleSection title="檔案管理 (存檔/匯出/匯入)" icon="💾" isOpen={openSections.file} onToggle={() => toggleSection('file')} colorClass="bg-slate-100" headerClass="text-slate-800">
+                                    <div className="space-y-3">
+                                        <div className="flex gap-2"><IMEInput placeholder="輸入存檔名稱" value={saveName} onChange={e => setSaveName(e.target.value)} className="w-full px-2 py-2 border rounded text-sm" /><button onClick={handleSave} disabled={!saveName} className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-bold disabled:opacity-50 whitespace-nowrap">儲存</button></div>
+                                        <div className="flex gap-2"><button onClick={handleExportFile} className="flex-1 py-2 bg-white border border-slate-300 rounded text-sm text-slate-700 hover:bg-slate-50 flex items-center justify-center gap-1"><i className="ph-bold ph-download-simple"></i> 下載備份</button><button onClick={() => fileInputRef.current.click()} className="flex-1 py-2 bg-white border border-slate-300 rounded text-sm text-slate-700 hover:bg-slate-50 flex items-center justify-center gap-1"><i className="ph-bold ph-upload-simple"></i> 匯入檔案</button><input type="file" accept=".json" ref={fileInputRef} onChange={handleImportFile} className="hidden" /></div>
+                                        {savedScenarios.length > 0 && (<div className="border-t border-slate-200 pt-2 space-y-2">{savedScenarios.map(save => (<div key={save.id} className="flex justify-between items-center bg-white p-2 rounded border border-slate-200 text-sm"><div className="flex items-center gap-2"><input type="checkbox" checked={compareTargets.includes(save.id)} onChange={() => toggleCompare(save.id)} className="w-4 h-4 accent-indigo-500" title="勾選加入圖表比較" /><div onClick={() => handleLoad(save.id)} className="cursor-pointer hover:text-blue-600"><div className="font-bold">{save.name}</div><div className="text-[10px] text-slate-400">{save.date}</div></div></div><div className="flex gap-1"><button onClick={() => handleLoad(save.id)} className="px-2 py-1 bg-slate-100 text-slate-600 rounded hover:bg-blue-50 hover:text-blue-600 text-xs">讀取</button><button onClick={() => handleDelete(save.id)} className="px-2 py-1 bg-slate-100 text-slate-600 rounded hover:bg-red-50 hover:text-red-600 text-xs">刪除</button></div></div>))}</div>)}
+                                    </div>
+                                </CollapsibleSection>
+
+                                <div className={`mb-4 rounded-xl p-4 text-white shadow-lg ${safeRetireAge && safeRetireAge <= 65 ? 'bg-gradient-to-br from-emerald-500 to-teal-600' : 'bg-gradient-to-br from-slate-700 to-slate-800'}`}>
+                                    <h3 className="text-xs font-bold opacity-80 mb-1 uppercase tracking-wider"><i className="ph-fill ph-medal"></i> 財務自由預測</h3>
+                                    <div className="flex justify-between items-end"><div><div className="text-2xl font-bold">{safeRetireAge ? `${safeRetireAge} 歲` : '無法退休'}</div><div className="text-xs opacity-75">{safeRetireAge ? '可達成資產不歸零' : '資產終將耗盡'}</div></div><div className="text-right"><div className="text-xs opacity-75">目前設定</div><div className="font-bold">{params.retireAge} 歲退</div></div></div>
+                                    {(safeRetireAge > 65 || !safeRetireAge) && <div className="mt-3 pt-2 border-t border-white/20 text-xs font-bold text-yellow-300 flex gap-2 items-center animate-pulse"><i className="ph-fill ph-warning"></i>超支了，建議找最大的支出去改善</div>}
                                 </div>
-                            </CollapsibleSection>
 
-                            <div className={`mb-4 rounded-xl p-4 text-white shadow-lg ${safeRetireAge && safeRetireAge <= 65 ? 'bg-gradient-to-br from-emerald-500 to-teal-600' : 'bg-gradient-to-br from-slate-700 to-slate-800'}`}>
-                                <h3 className="text-xs font-bold opacity-80 mb-1 uppercase tracking-wider"><i className="ph-fill ph-medal"></i> 財務自由預測</h3>
-                                <div className="flex justify-between items-end"><div><div className="text-2xl font-bold">{safeRetireAge ? `${safeRetireAge} 歲` : '無法退休'}</div><div className="text-xs opacity-75">{safeRetireAge ? '可達成資產不歸零' : '資產終將耗盡'}</div></div><div className="text-right"><div className="text-xs opacity-75">目前設定</div><div className="font-bold">{params.retireAge} 歲退</div></div></div>
-                                {(safeRetireAge > 65 || !safeRetireAge) && <div className="mt-3 pt-2 border-t border-white/20 text-xs font-bold text-yellow-300 flex gap-2 items-center animate-pulse"><i className="ph-fill ph-warning"></i>超支了，建議找最大的支出去改善</div>}
-                            </div>
-                            
-                            <div className="mb-6 bg-white border border-slate-200 rounded-xl p-4 shadow-sm overflow-hidden transition-all duration-300">
-                                <h3 className="text-xs font-bold text-slate-400 mb-3 uppercase tracking-wider flex items-center justify-between">
-                                    <span className="flex items-center gap-2"><i className="ph-fill ph-calendar-check"></i> 目前收支概況</span>
-                                    <button onClick={() => setShowDetailTable(!showDetailTable)} className="text-blue-600 hover:bg-blue-50 px-2 py-1 rounded text-[10px] flex items-center gap-1">
-                                        {showDetailTable ? '隱藏明細' : '展開明細'} <i className={`ph-bold ph-caret-down transition-transform ${showDetailTable ? 'rotate-180' : ''}`}></i>
-                                    </button>
-                                </h3>
-                                
-                                {!showDetailTable ? (
-                                    <>
-                                        <div className="grid grid-cols-2 gap-4 mb-4">
-                                            <div><div className="text-xs text-slate-400">日收入</div><div className="text-xl font-bold text-green-600 flex items-baseline gap-1">{new Intl.NumberFormat().format(dailyStats.income)}</div></div>
-                                            <div><div className="text-xs text-slate-400">日支出</div><div className="text-xl font-bold text-red-600 flex items-baseline gap-1">{new Intl.NumberFormat().format(dailyStats.expense)}</div></div>
-                                        </div>
-                                        <div className="mt-3 pt-2 border-t border-slate-100 flex justify-between items-center"><span className="text-xs font-bold text-slate-400">淨現金流</span><span className={`text-lg font-bold ${dailyStats.income - dailyStats.expense >= 0 ? 'text-blue-600' : 'text-red-500'}`}>{dailyStats.income - dailyStats.expense > 0 ? '+' : ''}{new Intl.NumberFormat().format(dailyStats.income - dailyStats.expense)}</span></div>
-                                    </>
-                                ) : (
-                                    <div className="animate-fade-in">
-                                        <table className="w-full text-xs text-right">
-                                            <thead>
-                                                <tr className="border-b border-slate-200 text-slate-400">
-                                                    <th className="pb-2 text-left font-normal">項目</th>
-                                                    <th className="pb-2 font-normal">日</th>
-                                                    <th className="pb-2 font-normal">月</th>
-                                                    <th className="pb-2 font-normal">年 (萬)</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="text-slate-600">
-                                                {dailyStats.breakdown.map((item, idx) => (
-                                                    <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50">
-                                                        <td className={`py-2 text-left font-bold ${item.type === 'inc' ? 'text-green-600' : 'text-slate-600'}`}>{item.label}</td>
-                                                        <td className="py-2">{new Intl.NumberFormat().format(item.daily)}</td>
-                                                        <td className="py-2">{new Intl.NumberFormat().format(item.monthly)}</td>
-                                                        <td className="py-2">{Math.round(item.yearly/10000 * 10) / 10}</td>
+                                <div className="mb-6 bg-white border border-slate-200 rounded-xl p-4 shadow-sm overflow-hidden transition-all duration-300">
+                                    <h3 className="text-xs font-bold text-slate-400 mb-3 uppercase tracking-wider flex items-center justify-between">
+                                        <span className="flex items-center gap-2"><i className="ph-fill ph-calendar-check"></i> 目前收支概況</span>
+                                        <button onClick={() => setShowDetailTable(!showDetailTable)} className="text-blue-600 hover:bg-blue-50 px-2 py-1 rounded text-[10px] flex items-center gap-1">
+                                            {showDetailTable ? '隱藏明細' : '展開明細'} <i className={`ph-bold ph-caret-down transition-transform ${showDetailTable ? 'rotate-180' : ''}`}></i>
+                                        </button>
+                                    </h3>
+
+                                    {!showDetailTable ? (
+                                        <>
+                                            <div className="grid grid-cols-2 gap-4 mb-4">
+                                                <div><div className="text-xs text-slate-400">日收入</div><div className="text-xl font-bold text-green-600 flex items-baseline gap-1">{new Intl.NumberFormat().format(dailyStats.income)}</div></div>
+                                                <div><div className="text-xs text-slate-400">日支出</div><div className="text-xl font-bold text-red-600 flex items-baseline gap-1">{new Intl.NumberFormat().format(dailyStats.expense)}</div></div>
+                                            </div>
+                                            <div className="mt-3 pt-2 border-t border-slate-100 flex justify-between items-center"><span className="text-xs font-bold text-slate-400">淨現金流</span><span className={`text-lg font-bold ${dailyStats.income - dailyStats.expense >= 0 ? 'text-blue-600' : 'text-red-500'}`}>{dailyStats.income - dailyStats.expense > 0 ? '+' : ''}{new Intl.NumberFormat().format(dailyStats.income - dailyStats.expense)}</span></div>
+                                        </>
+                                    ) : (
+                                        <div className="animate-fade-in">
+                                            <table className="w-full text-xs text-right">
+                                                <thead>
+                                                    <tr className="border-b border-slate-200 text-slate-400">
+                                                        <th className="pb-2 text-left font-normal">項目</th>
+                                                        <th className="pb-2 font-normal">日</th>
+                                                        <th className="pb-2 font-normal">月</th>
+                                                        <th className="pb-2 font-normal">年 (萬)</th>
                                                     </tr>
+                                                </thead>
+                                                <tbody className="text-slate-600">
+                                                    {dailyStats.breakdown.map((item, idx) => (
+                                                        <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50">
+                                                            <td className={`py-2 text-left font-bold ${item.type === 'inc' ? 'text-green-600' : 'text-slate-600'}`}>{item.label}</td>
+                                                            <td className="py-2">{new Intl.NumberFormat().format(item.daily)}</td>
+                                                            <td className="py-2">{new Intl.NumberFormat().format(item.monthly)}</td>
+                                                            <td className="py-2">{Math.round(item.yearly / 10000 * 10) / 10}</td>
+                                                        </tr>
+                                                    ))}
+                                                    <tr className="border-t-2 border-slate-100 font-bold bg-slate-50/50">
+                                                        <td className="py-2 text-left text-green-600">總收入</td>
+                                                        <td className="py-2 text-green-600">{new Intl.NumberFormat().format(dailyStats.details.totalIncome.daily)}</td>
+                                                        <td className="py-2 text-green-600">{new Intl.NumberFormat().format(dailyStats.details.totalIncome.monthly)}</td>
+                                                        <td className="py-2 text-green-600">{Math.round(dailyStats.details.totalIncome.yearly / 10000)}</td>
+                                                    </tr>
+                                                    <tr className="font-bold bg-slate-50/50">
+                                                        <td className="py-2 text-left text-red-500">總支出</td>
+                                                        <td className="py-2 text-red-500">{new Intl.NumberFormat().format(dailyStats.details.totalExpense.daily)}</td>
+                                                        <td className="py-2 text-red-500">{new Intl.NumberFormat().format(dailyStats.details.totalExpense.monthly)}</td>
+                                                        <td className="py-2 text-red-500">{Math.round(dailyStats.details.totalExpense.yearly / 10000)}</td>
+                                                    </tr>
+                                                    <tr className="border-t border-slate-200 font-black">
+                                                        <td className="py-3 text-left">淨結餘</td>
+                                                        <td className={`py-3 ${dailyStats.income - dailyStats.expense >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{new Intl.NumberFormat().format(dailyStats.income - dailyStats.expense)}</td>
+                                                        <td className={`py-3 ${dailyStats.income - dailyStats.expense >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{new Intl.NumberFormat().format((dailyStats.income - dailyStats.expense) * 30)}</td>
+                                                        <td className={`py-3 ${dailyStats.income - dailyStats.expense >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{Math.round((dailyStats.details.totalIncome.yearly - dailyStats.details.totalExpense.yearly) / 10000)}</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <button onClick={() => setIsAIModalOpen(true)} className="md:hidden w-full mb-4 px-4 py-3 bg-gradient-to-r from-indigo-500 to-blue-500 text-white rounded-xl font-bold shadow-md flex items-center justify-center gap-2 ai-pulse"><i className="ph-fill ph-sparkle"></i> AI 財務顧問診斷</button>
+
+                                <CollapsibleSection title="基礎與收入" icon="👤" isOpen={openSections.basic} onToggle={() => toggleSection('basic')}>
+                                    <NumberControl label="目前年齡" value={params.currentAge} onChange={v => setParams({ ...params, currentAge: v })} min={18} max={60} unit="歲" />
+                                    <NumberControl label="初始資產" value={params.currentAssets} onChange={v => setParams({ ...params, currentAssets: v })} min={-1000} max={5000} step={10} unit="萬" />
+                                    <NumberControl label="預計退休" value={params.retireAge} onChange={v => setParams({ ...params, retireAge: v })} min={20} max={80} unit="歲" />
+
+                                    {/* 新增預備金設定 */}
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <div className="flex-1">
+                                            <NumberControl label="預備金(月)" value={params.emergencyFundMonths} onChange={v => setParams({ ...params, emergencyFundMonths: v })} min={0} max={24} step={0.5} unit="月" compact />
+                                        </div>
+                                        <div className="text-xs text-slate-500 font-bold bg-slate-100 px-3 py-2 rounded self-start mt-6">
+                                            ≈ {new Intl.NumberFormat().format(params.monthlyExpense * params.emergencyFundMonths)} 萬 (依月支出)
+                                        </div>
+                                    </div>
+
+                                    <div className="border-t pt-2 mt-2">
+                                        <NumberControl label="月薪收入" value={params.monthlyIncome} onChange={v => setParams({ ...params, monthlyIncome: v })} min={0} max={50} step={0.5} unit="萬" />
+                                        <NumberControl label="年終獎金" value={params.bonusMonths} onChange={v => setParams({ ...params, bonusMonths: v })} min={0} max={24} step={0.5} unit="個月" />
+                                        <NumberControl label="薪資成長" value={params.incomeGrowth} onChange={v => setParams({ ...params, incomeGrowth: v })} min={0} max={10} step={0.1} unit="%" />
+                                        <NumberControl label="投資報酬" subLabel="(名目)" value={params.investReturn} onChange={v => setParams({ ...params, investReturn: v })} min={-20} max={30} step={0.5} unit="%" />
+                                    </div>
+                                </CollapsibleSection>
+
+                                <CollapsibleSection title="生活開銷 (每日細項)" icon="🍜" isOpen={openSections.expense} onToggle={() => toggleSection('expense')}>
+                                    <div className="mb-4 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="text-sm font-bold text-slate-700 flex items-center gap-2"><i className="ph-fill ph-receipt"></i> 每日細項計算</span>
+                                            <label className="relative inline-flex items-center cursor-pointer"><input type="checkbox" checked={useDailyDetail} onChange={e => setUseDailyDetail(e.target.checked)} className="sr-only peer" /><div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div></label>
+                                        </div>
+                                        {useDailyDetail && (
+                                            <div className="animate-fade-in space-y-2 mt-3">
+                                                {dailyItems.map((item) => (
+                                                    <div key={item.id} className="flex gap-2 items-center">
+                                                        <IMEInput value={item.name} onChange={e => { const newItems = [...dailyItems]; newItems.find(x => x.id === item.id).name = e.target.value; setDailyItems(newItems); }} className="w-1/2 p-1 text-sm border rounded" />
+                                                        <input type="number" value={item.cost} onChange={e => { const newItems = [...dailyItems]; newItems.find(x => x.id === item.id).cost = e.target.value; setDailyItems(newItems); }} className="w-1/4 p-1 text-sm border rounded text-right" />
+                                                        <button onClick={() => setDailyItems(dailyItems.filter(i => i.id !== item.id))} className="w-8 text-slate-400 hover:text-red-500">×</button>
+                                                    </div>
                                                 ))}
-                                                <tr className="border-t-2 border-slate-100 font-bold bg-slate-50/50">
-                                                    <td className="py-2 text-left text-green-600">總收入</td>
-                                                    <td className="py-2 text-green-600">{new Intl.NumberFormat().format(dailyStats.details.totalIncome.daily)}</td>
-                                                    <td className="py-2 text-green-600">{new Intl.NumberFormat().format(dailyStats.details.totalIncome.monthly)}</td>
-                                                    <td className="py-2 text-green-600">{Math.round(dailyStats.details.totalIncome.yearly/10000)}</td>
-                                                </tr>
-                                                <tr className="font-bold bg-slate-50/50">
-                                                    <td className="py-2 text-left text-red-500">總支出</td>
-                                                    <td className="py-2 text-red-500">{new Intl.NumberFormat().format(dailyStats.details.totalExpense.daily)}</td>
-                                                    <td className="py-2 text-red-500">{new Intl.NumberFormat().format(dailyStats.details.totalExpense.monthly)}</td>
-                                                    <td className="py-2 text-red-500">{Math.round(dailyStats.details.totalExpense.yearly/10000)}</td>
-                                                </tr>
-                                                <tr className="border-t border-slate-200 font-black">
-                                                    <td className="py-3 text-left">淨結餘</td>
-                                                    <td className={`py-3 ${dailyStats.income - dailyStats.expense >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{new Intl.NumberFormat().format(dailyStats.income - dailyStats.expense)}</td>
-                                                    <td className={`py-3 ${dailyStats.income - dailyStats.expense >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{new Intl.NumberFormat().format((dailyStats.income - dailyStats.expense)*30)}</td>
-                                                    <td className={`py-3 ${dailyStats.income - dailyStats.expense >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{Math.round((dailyStats.details.totalIncome.yearly - dailyStats.details.totalExpense.yearly)/10000)}</td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
+                                                <button onClick={() => setDailyItems([...dailyItems, { id: Date.now(), name: '', cost: 0 }])} className="w-full py-1 text-xs text-blue-600 border border-blue-200 rounded hover:bg-blue-50 mt-2">+ 新增</button>
+                                                <AIBudgetOptimizer dailyItems={dailyItems} onOptimize={() => { }} />
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                            </div>
+                                    <NumberControl label="月生活費" subLabel={useDailyDetail ? "(自動計算)" : ""} value={params.monthlyExpense} onChange={v => setParams({ ...params, monthlyExpense: v })} min={0} max={30} step={0.1} unit="萬" readOnly={useDailyDetail} />
+                                    <NumberControl label="通膨率" value={params.inflationRate} onChange={v => setParams({ ...params, inflationRate: v })} min={0} max={10} step={0.1} unit="%" />
+                                </CollapsibleSection>
 
-                            <button onClick={() => setIsAIModalOpen(true)} className="md:hidden w-full mb-4 px-4 py-3 bg-gradient-to-r from-indigo-500 to-blue-500 text-white rounded-xl font-bold shadow-md flex items-center justify-center gap-2 ai-pulse"><i className="ph-fill ph-sparkle"></i> AI 財務顧問診斷</button>
+                                <CollapsibleSection title="房產投資" icon="🏠" isOpen={openSections.house} onToggle={() => toggleSection('house')} colorClass="bg-purple-50/50" headerClass="text-purple-800">
+                                    <AddItemBox title="新增房產" onAdd={addProperty} disabled={!newProperty.name || !newProperty.price} footer={`💡 依月薪 33% 負擔建議房價上限 ${suggestedHousePrice} 萬`}>
+                                        <IMEInput placeholder="名稱" value={newProperty.name} onChange={e => setNewProperty({ ...newProperty, name: e.target.value })} className="w-full px-2 py-2 border rounded text-sm mb-2" />
+                                        <div className="grid grid-cols-2 gap-2 mb-2"><div><label className="text-xs text-slate-500">總價(萬)</label><input type="number" step="0.01" value={newProperty.price} onChange={e => setNewProperty({ ...newProperty, price: e.target.value })} className="w-full px-2 py-2 border rounded text-sm" /></div><div><label className="text-xs text-slate-500">購買歲數</label><input type="number" value={newProperty.buyAge} onChange={e => setNewProperty({ ...newProperty, buyAge: e.target.value })} className="w-full px-2 py-2 border rounded text-sm" /></div></div>
+                                        {/* 顯示適合購屋建議 */}
+                                        {suitableBuyAge && (
+                                            <div className="text-xs text-purple-600 font-bold mb-2 bg-purple-50 p-2 rounded">
+                                                <i className="ph-fill ph-magic-wand"></i> 依目前儲蓄速度，預計 {suitableBuyAge} 歲可存到頭期款
+                                            </div>
+                                        )}
+                                        <div className="grid grid-cols-3 gap-2 mb-2"><div><label className="text-xs text-slate-500">頭期(%)</label><input type="number" value={newProperty.downPayment} onChange={e => setNewProperty({ ...newProperty, downPayment: e.target.value })} className="w-full px-2 py-2 border rounded text-sm" /></div><div><label className="text-xs text-slate-500">年限</label><input type="number" value={newProperty.loanTerm} onChange={e => setNewProperty({ ...newProperty, loanTerm: e.target.value })} className="w-full px-2 py-2 border rounded text-sm" /></div><div><label className="text-xs text-slate-500">利率</label><input type="number" value={newProperty.rate} onChange={e => setNewProperty({ ...newProperty, rate: e.target.value })} className="w-full px-2 py-2 border rounded text-sm" /></div></div>
+                                    </AddItemBox>
+                                    <div className="space-y-2">{properties.map(p => (<div key={p.id} className="bg-white p-2 border rounded text-sm shadow-sm relative"><div className="font-bold text-purple-700 flex justify-between pr-6"><span>{p.name} <span className="text-xs font-normal text-slate-500">({p.buyAge}歲買)</span></span><span className="text-xs text-slate-400">{p.price}萬</span></div><div className="mt-1 text-xs text-slate-500 flex gap-3"><span>月付: {new Intl.NumberFormat().format(calculateLoan(p.price, p.downPayment, p.loanTerm, p.rate).monthly)}</span><span>日均: {new Intl.NumberFormat().format(calculateLoan(p.price, p.downPayment, p.loanTerm, p.rate).daily)}</span></div><button onClick={() => removeProperty(p.id)} className="absolute top-2 right-2 text-slate-400 hover:text-red-500">×</button></div>))}</div>
+                                </CollapsibleSection>
 
-                            <CollapsibleSection title="基礎與收入" icon="👤" isOpen={openSections.basic} onToggle={() => toggleSection('basic')}>
-                                <NumberControl label="目前年齡" value={params.currentAge} onChange={v => setParams({...params, currentAge: v})} min={18} max={60} unit="歲" />
-                                <NumberControl label="初始資產" value={params.currentAssets} onChange={v => setParams({...params, currentAssets: v})} min={-1000} max={5000} step={10} unit="萬" />
-                                <NumberControl label="預計退休" value={params.retireAge} onChange={v => setParams({...params, retireAge: v})} min={20} max={80} unit="歲" />
-                                
-                                {/* 新增預備金設定 */}
-                                <div className="flex items-center gap-2 mb-4">
-                                    <div className="flex-1">
-                                        <NumberControl label="預備金(月)" value={params.emergencyFundMonths} onChange={v => setParams({...params, emergencyFundMonths: v})} min={0} max={24} step={0.5} unit="月" compact />
-                                    </div>
-                                    <div className="text-xs text-slate-500 font-bold bg-slate-100 px-3 py-2 rounded self-start mt-6">
-                                         ≈ {new Intl.NumberFormat().format(params.monthlyExpense * params.emergencyFundMonths)} 萬 (依月支出)
-                                    </div>
-                                </div>
+                                <CollapsibleSection title="子女養育" icon="👶" isOpen={openSections.child} onToggle={() => toggleSection('child')} colorClass="bg-orange-50/50" headerClass="text-orange-800">
+                                    <AddItemBox title="新增子女" onAdd={addChild} disabled={false}><div className="flex gap-2"><IMEInput placeholder="名字" value={newChild.name} onChange={e => setNewChild({ ...newChild, name: e.target.value })} className="w-2/3 px-2 py-2 border rounded text-sm" /><div className="w-1/3 flex items-center"><input type="number" placeholder="出生歲" value={newChild.birthAge} onChange={e => setNewChild({ ...newChild, birthAge: parseInt(e.target.value) })} className="w-full px-2 py-2 border rounded text-sm text-center" /></div></div></AddItemBox>
+                                    <div className="space-y-3">{childrenList.map(child => (<div key={child.id} className="bg-white p-3 border rounded text-sm shadow-sm relative"><div className="flex justify-between items-center mb-2"><div className="font-bold text-orange-700">{child.name}</div><div className="text-xs text-orange-500">此時我 {child.birthAge} 歲</div></div><div className="space-y-1">{child.stages.map(stage => (<div key={stage.id} className="flex items-center gap-2 text-xs"><span className="w-16 truncate text-slate-500" title={stage.name}>{stage.name}</span><div className="flex items-center bg-slate-50 rounded px-1"><input type="number" value={stage.duration} onChange={e => updateChildStage(child.id, stage.id, 'duration', parseFloat(e.target.value))} className="w-8 bg-transparent text-center outline-none border-b border-slate-300" /><span className="text-slate-400">年</span></div><div className="flex-1 flex items-center bg-slate-50 rounded px-1"><input type="number" value={stage.cost} onChange={e => updateChildStage(child.id, stage.id, 'cost', parseFloat(e.target.value))} className="w-full bg-transparent text-right outline-none border-b border-slate-300" /><span className="text-slate-400 ml-1">萬/月</span></div></div>))}</div><button onClick={() => removeChild(child.id)} className="absolute top-2 right-2 text-slate-400 hover:text-red-500">×</button></div>))}</div>
+                                </CollapsibleSection>
 
-                                <div className="border-t pt-2 mt-2">
-                                    <NumberControl label="月薪收入" value={params.monthlyIncome} onChange={v => setParams({...params, monthlyIncome: v})} min={0} max={50} step={0.5} unit="萬" />
-                                    <NumberControl label="年終獎金" value={params.bonusMonths} onChange={v => setParams({...params, bonusMonths: v})} min={0} max={24} step={0.5} unit="個月" />
-                                    <NumberControl label="薪資成長" value={params.incomeGrowth} onChange={v => setParams({...params, incomeGrowth: v})} min={0} max={10} step={0.1} unit="%" />
-                                    <NumberControl label="投資報酬" subLabel="(名目)" value={params.investReturn} onChange={v => setParams({...params, investReturn: v})} min={-20} max={30} step={0.5} unit="%" />
-                                </div>
-                            </CollapsibleSection>
-
-                            <CollapsibleSection title="生活開銷 (每日細項)" icon="🍜" isOpen={openSections.expense} onToggle={() => toggleSection('expense')}>
-                                <div className="mb-4 bg-slate-50 p-3 rounded-lg border border-slate-200">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="text-sm font-bold text-slate-700 flex items-center gap-2"><i className="ph-fill ph-receipt"></i> 每日細項計算</span>
-                                        <label className="relative inline-flex items-center cursor-pointer"><input type="checkbox" checked={useDailyDetail} onChange={e => setUseDailyDetail(e.target.checked)} className="sr-only peer" /><div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div></label>
-                                    </div>
-                                    {useDailyDetail && (
-                                        <div className="animate-fade-in space-y-2 mt-3">
-                                            {dailyItems.map((item) => (
-                                                <div key={item.id} className="flex gap-2 items-center">
-                                                    <IMEInput value={item.name} onChange={e => {const newItems=[...dailyItems]; newItems.find(x=>x.id===item.id).name=e.target.value; setDailyItems(newItems);}} className="w-1/2 p-1 text-sm border rounded"/>
-                                                    <input type="number" value={item.cost} onChange={e => {const newItems=[...dailyItems]; newItems.find(x=>x.id===item.id).cost=e.target.value; setDailyItems(newItems);}} className="w-1/4 p-1 text-sm border rounded text-right"/>
-                                                    <button onClick={() => setDailyItems(dailyItems.filter(i=>i.id!==item.id))} className="w-8 text-slate-400 hover:text-red-500">×</button>
+                                <CollapsibleSection title="車輛 & 孝親 & 其他" icon="⚙️" isOpen={openSections.car} onToggle={() => toggleSection('car')} colorClass="bg-gray-50" headerClass="text-gray-800">
+                                    <div className="space-y-4">
+                                        <div className="border-l-4 border-teal-500 pl-2">
+                                            <div className="flex justify-between mb-2 text-sm font-bold text-teal-700"><span>孝親費</span><input type="checkbox" checked={params.hasParents} onChange={e => setParams({ ...params, hasParents: e.target.checked })} className="accent-teal-600" /></div>
+                                            {params.hasParents && <div className="space-y-2"><NumberControl label="月孝親" value={params.parentsMonthlyCost} onChange={v => setParams({ ...params, parentsMonthlyCost: v })} min={0.5} max={10} step={0.5} unit="萬" compact /><div className="flex gap-2"><NumberControl label="開始歲" value={params.parentsStartAge} onChange={v => setParams({ ...params, parentsStartAge: v })} min={20} max={60} compact /><NumberControl label="結束歲" value={params.parentsEndAge} onChange={v => setParams({ ...params, parentsEndAge: v })} min={50} max={90} compact /></div></div>}
+                                        </div>
+                                        <div className="border-l-4 border-pink-500 pl-2">
+                                            <div className="flex justify-between mb-2 text-sm font-bold text-pink-700"><span>婚姻</span><input type="checkbox" checked={params.hasMarriage} onChange={e => setParams({ ...params, hasMarriage: e.target.checked })} className="accent-pink-600" /></div>
+                                            {params.hasMarriage && <div className="flex gap-2"><NumberControl label="結婚歲" value={params.marriageAge} onChange={v => setParams({ ...params, marriageAge: v })} min={20} max={60} compact /><NumberControl label="花費" value={params.marriageCost} onChange={v => setParams({ ...params, marriageCost: v })} min={10} max={300} unit="萬" compact /></div>}
+                                        </div>
+                                        <div className="border-l-4 border-blue-500 pl-2">
+                                            <div className="text-sm font-bold text-blue-700 mb-2">車輛貸款</div>
+                                            <AddItemBox title="新增車輛" onAdd={addCar} disabled={!newCar.name || !newCar.price}>
+                                                <IMEInput placeholder="名稱" value={newCar.name} onChange={e => setNewCar({ ...newCar, name: e.target.value })} className="w-full px-2 py-1 border rounded text-xs mb-1" />
+                                                <div className="grid grid-cols-3 gap-1">
+                                                    <div><label className="text-[10px] text-slate-500 block">價格(萬)</label><input type="number" step="0.01" value={newCar.price} onChange={e => setNewCar({ ...newCar, price: e.target.value })} className="w-full px-1 border rounded text-xs" /></div>
+                                                    <div><label className="text-[10px] text-slate-500 block">購入歲數</label><input type="number" value={newCar.buyAge} onChange={e => setNewCar({ ...newCar, buyAge: e.target.value })} className="w-full px-1 border rounded text-xs" /></div>
+                                                    <div><label className="text-[10px] text-slate-500 block">貸款年限</label><input type="number" value={newCar.loanTerm} onChange={e => setNewCar({ ...newCar, loanTerm: e.target.value })} className="w-full px-1 border rounded text-xs" /></div>
                                                 </div>
-                                            ))}
-                                            <button onClick={() => setDailyItems([...dailyItems, {id:Date.now(), name:'', cost:0}])} className="w-full py-1 text-xs text-blue-600 border border-blue-200 rounded hover:bg-blue-50 mt-2">+ 新增</button>
-                                            <AIBudgetOptimizer dailyItems={dailyItems} onOptimize={() => {}} />
+                                            </AddItemBox>
+                                            <div className="space-y-2 mt-2">
+                                                {cars.map(c => (
+                                                    <div key={c.id} className="bg-white p-2 border rounded text-xs relative">
+                                                        <div className="flex items-center gap-1 mb-1">
+                                                            <input type="text" value={c.name} onChange={e => updateCar(c.id, 'name', e.target.value)} className="font-bold border-b border-dashed border-slate-300 w-full outline-none" />
+                                                            <button onClick={() => removeCar(c.id)} className="text-red-400 ml-1">×</button>
+                                                        </div>
+                                                        <div className="grid grid-cols-3 gap-1">
+                                                            <div><label className="text-[10px] text-slate-400">價格</label><input type="number" step="0.01" value={c.price} onChange={e => updateCar(c.id, 'price', e.target.value)} className="w-full border rounded px-1" /></div>
+                                                            <div><label className="text-[10px] text-slate-400">購入歲</label><input type="number" value={c.buyAge} onChange={e => updateCar(c.id, 'buyAge', e.target.value)} className="w-full border rounded px-1" /></div>
+                                                            <div><label className="text-[10px] text-slate-400">貸款年</label><input type="number" value={c.loanTerm} onChange={e => updateCar(c.id, 'loanTerm', e.target.value)} className="w-full border rounded px-1" /></div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
-                                    )}
-                                </div>
-                                <NumberControl label="月生活費" subLabel={useDailyDetail ? "(自動計算)" : ""} value={params.monthlyExpense} onChange={v => setParams({...params, monthlyExpense: v})} min={1} max={30} step={0.5} unit="萬" readOnly={useDailyDetail}/>
-                                <NumberControl label="通膨率" value={params.inflationRate} onChange={v => setParams({...params, inflationRate: v})} min={0} max={10} step={0.1} unit="%" />
-                            </CollapsibleSection>
-
-                            <CollapsibleSection title="房產投資" icon="🏠" isOpen={openSections.house} onToggle={() => toggleSection('house')} colorClass="bg-purple-50/50" headerClass="text-purple-800">
-                                <AddItemBox title="新增房產" onAdd={addProperty} disabled={!newProperty.name || !newProperty.price} footer={`💡 依月薪 33% 負擔建議房價上限 ${suggestedHousePrice} 萬`}>
-                                    <IMEInput placeholder="名稱" value={newProperty.name} onChange={e => setNewProperty({...newProperty, name: e.target.value})} className="w-full px-2 py-2 border rounded text-sm mb-2"/>
-                                    <div className="grid grid-cols-2 gap-2 mb-2"><div><label className="text-xs text-slate-500">總價(萬)</label><input type="number" step="0.01" value={newProperty.price} onChange={e => setNewProperty({...newProperty, price: e.target.value})} className="w-full px-2 py-2 border rounded text-sm"/></div><div><label className="text-xs text-slate-500">購買歲數</label><input type="number" value={newProperty.buyAge} onChange={e => setNewProperty({...newProperty, buyAge: e.target.value})} className="w-full px-2 py-2 border rounded text-sm"/></div></div>
-                                    {/* 顯示適合購屋建議 */}
-                                    {suitableBuyAge && (
-                                        <div className="text-xs text-purple-600 font-bold mb-2 bg-purple-50 p-2 rounded">
-                                            <i className="ph-fill ph-magic-wand"></i> 依目前儲蓄速度，預計 {suitableBuyAge} 歲可存到頭期款
-                                        </div>
-                                    )}
-                                    <div className="grid grid-cols-3 gap-2 mb-2"><div><label className="text-xs text-slate-500">頭期(%)</label><input type="number" value={newProperty.downPayment} onChange={e => setNewProperty({...newProperty, downPayment: e.target.value})} className="w-full px-2 py-2 border rounded text-sm"/></div><div><label className="text-xs text-slate-500">年限</label><input type="number" value={newProperty.loanTerm} onChange={e => setNewProperty({...newProperty, loanTerm: e.target.value})} className="w-full px-2 py-2 border rounded text-sm"/></div><div><label className="text-xs text-slate-500">利率</label><input type="number" value={newProperty.rate} onChange={e => setNewProperty({...newProperty, rate: e.target.value})} className="w-full px-2 py-2 border rounded text-sm"/></div></div>
-                                </AddItemBox>
-                                <div className="space-y-2">{properties.map(p => (<div key={p.id} className="bg-white p-2 border rounded text-sm shadow-sm relative"><div className="font-bold text-purple-700 flex justify-between pr-6"><span>{p.name} <span className="text-xs font-normal text-slate-500">({p.buyAge}歲買)</span></span><span className="text-xs text-slate-400">{p.price}萬</span></div><div className="mt-1 text-xs text-slate-500 flex gap-3"><span>月付: {new Intl.NumberFormat().format(calculateLoan(p.price, p.downPayment, p.loanTerm, p.rate).monthly)}</span><span>日均: {new Intl.NumberFormat().format(calculateLoan(p.price, p.downPayment, p.loanTerm, p.rate).daily)}</span></div><button onClick={() => removeProperty(p.id)} className="absolute top-2 right-2 text-slate-400 hover:text-red-500">×</button></div>))}</div>
-                            </CollapsibleSection>
-
-                            <CollapsibleSection title="子女養育" icon="👶" isOpen={openSections.child} onToggle={() => toggleSection('child')} colorClass="bg-orange-50/50" headerClass="text-orange-800">
-                                <AddItemBox title="新增子女" onAdd={addChild} disabled={false}><div className="flex gap-2"><IMEInput placeholder="名字" value={newChild.name} onChange={e => setNewChild({...newChild, name: e.target.value})} className="w-2/3 px-2 py-2 border rounded text-sm"/><div className="w-1/3 flex items-center"><input type="number" placeholder="出生歲" value={newChild.birthAge} onChange={e => setNewChild({...newChild, birthAge: parseInt(e.target.value)})} className="w-full px-2 py-2 border rounded text-sm text-center"/></div></div></AddItemBox>
-                                <div className="space-y-3">{childrenList.map(child => (<div key={child.id} className="bg-white p-3 border rounded text-sm shadow-sm relative"><div className="flex justify-between items-center mb-2"><div className="font-bold text-orange-700">{child.name}</div><div className="text-xs text-orange-500">此時我 {child.birthAge} 歲</div></div><div className="space-y-1">{child.stages.map(stage => (<div key={stage.id} className="flex items-center gap-2 text-xs"><span className="w-16 truncate text-slate-500" title={stage.name}>{stage.name}</span><div className="flex items-center bg-slate-50 rounded px-1"><input type="number" value={stage.duration} onChange={e => updateChildStage(child.id, stage.id, 'duration', parseFloat(e.target.value))} className="w-8 bg-transparent text-center outline-none border-b border-slate-300"/><span className="text-slate-400">年</span></div><div className="flex-1 flex items-center bg-slate-50 rounded px-1"><input type="number" value={stage.cost} onChange={e => updateChildStage(child.id, stage.id, 'cost', parseFloat(e.target.value))} className="w-full bg-transparent text-right outline-none border-b border-slate-300"/><span className="text-slate-400 ml-1">萬/月</span></div></div>))}</div><button onClick={() => removeChild(child.id)} className="absolute top-2 right-2 text-slate-400 hover:text-red-500">×</button></div>))}</div>
-                            </CollapsibleSection>
-
-                            <CollapsibleSection title="車輛 & 孝親 & 其他" icon="⚙️" isOpen={openSections.car} onToggle={() => toggleSection('car')} colorClass="bg-gray-50" headerClass="text-gray-800">
-                                <div className="space-y-4">
-                                    <div className="border-l-4 border-teal-500 pl-2">
-                                        <div className="flex justify-between mb-2 text-sm font-bold text-teal-700"><span>孝親費</span><input type="checkbox" checked={params.hasParents} onChange={e => setParams({...params, hasParents: e.target.checked})} className="accent-teal-600"/></div>
-                                        {params.hasParents && <div className="space-y-2"><NumberControl label="月孝親" value={params.parentsMonthlyCost} onChange={v => setParams({...params, parentsMonthlyCost: v})} min={0.5} max={10} step={0.5} unit="萬" compact /><div className="flex gap-2"><NumberControl label="開始歲" value={params.parentsStartAge} onChange={v => setParams({...params, parentsStartAge: v})} min={20} max={60} compact /><NumberControl label="結束歲" value={params.parentsEndAge} onChange={v => setParams({...params, parentsEndAge: v})} min={50} max={90} compact /></div></div>}
                                     </div>
-                                    <div className="border-l-4 border-pink-500 pl-2">
-                                        <div className="flex justify-between mb-2 text-sm font-bold text-pink-700"><span>婚姻</span><input type="checkbox" checked={params.hasMarriage} onChange={e => setParams({...params, hasMarriage: e.target.checked})} className="accent-pink-600"/></div>
-                                        {params.hasMarriage && <div className="flex gap-2"><NumberControl label="結婚歲" value={params.marriageAge} onChange={v => setParams({...params, marriageAge: v})} min={20} max={60} compact /><NumberControl label="花費" value={params.marriageCost} onChange={v => setParams({...params, marriageCost: v})} min={10} max={300} unit="萬" compact /></div>}
-                                    </div>
-                                    <div className="border-l-4 border-blue-500 pl-2">
-                                        <div className="text-sm font-bold text-blue-700 mb-2">車輛貸款</div>
-                                        <AddItemBox title="新增車輛" onAdd={addCar} disabled={!newCar.name || !newCar.price}>
-                                            <IMEInput placeholder="名稱" value={newCar.name} onChange={e => setNewCar({...newCar, name: e.target.value})} className="w-full px-2 py-1 border rounded text-xs mb-1"/>
-                                            <div className="grid grid-cols-3 gap-1">
-                                                <div><label className="text-[10px] text-slate-500 block">價格(萬)</label><input type="number" step="0.01" value={newCar.price} onChange={e => setNewCar({...newCar, price: e.target.value})} className="w-full px-1 border rounded text-xs"/></div>
-                                                <div><label className="text-[10px] text-slate-500 block">購入歲數</label><input type="number" value={newCar.buyAge} onChange={e => setNewCar({...newCar, buyAge: e.target.value})} className="w-full px-1 border rounded text-xs"/></div>
-                                                <div><label className="text-[10px] text-slate-500 block">貸款年限</label><input type="number" value={newCar.loanTerm} onChange={e => setNewCar({...newCar, loanTerm: e.target.value})} className="w-full px-1 border rounded text-xs"/></div>
+                                </CollapsibleSection>
+
+                                <CollapsibleSection title="被動收入 & 自訂" icon="💸" isOpen={openSections.custom} onToggle={() => toggleSection('custom')}>
+                                    <div className="space-y-4">
+                                        <AddItemBox title="新增被動收入" onAdd={addPassiveIncome} disabled={!newPassive.name || !newPassive.amount}><div className="flex gap-2 mb-1"><IMEInput placeholder="名稱" value={newPassive.name} onChange={e => setNewPassive({ ...newPassive, name: e.target.value })} className="w-2/3 px-2 py-1 border rounded text-xs" /><input type="number" step="0.01" placeholder="萬" value={newPassive.amount} onChange={e => setNewPassive({ ...newPassive, amount: e.target.value })} className="w-1/3 px-2 py-1 border rounded text-xs" /></div><div className="flex gap-2"><input type="number" placeholder="起歲" value={newPassive.startAge} onChange={e => setNewPassive({ ...newPassive, startAge: e.target.value })} className="w-1/3 px-1 border rounded text-xs" /><input type="number" placeholder="迄歲" value={newPassive.endAge} onChange={e => setNewPassive({ ...newPassive, endAge: e.target.value })} className="w-1/3 px-1 border rounded text-xs" /><select value={newPassive.frequency} onChange={e => setNewPassive({ ...newPassive, frequency: e.target.value })} className="w-1/3 text-xs bg-white border rounded"><option value="monthly">月</option><option value="yearly">年</option></select></div></AddItemBox>
+                                        <div className="space-y-1">{passiveIncomes.map(p => (<div key={p.id} className="flex justify-between bg-white p-1 border rounded text-xs text-green-700"><span>{p.name} (+{p.amount})</span><button onClick={() => removePassiveIncome(p.id)} className="text-red-400">×</button></div>))}</div>
+
+                                        <AddItemBox title="自訂支出" onAdd={addCustomExpense} disabled={!newCustomExp.name || !newCustomExp.amount}>
+                                            <div className="flex gap-2 mb-1">
+                                                <IMEInput placeholder="項目" value={newCustomExp.name} onChange={e => setNewCustomExp({ ...newCustomExp, name: e.target.value })} className="w-2/3 px-2 py-1 border rounded text-xs" />
+                                                <input type="number" step="0.01" placeholder="萬" value={newCustomExp.amount} onChange={e => setNewCustomExp({ ...newCustomExp, amount: e.target.value })} className="w-1/3 px-2 py-1 border rounded text-xs" />
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <input type="number" placeholder="起歲" value={newCustomExp.startAge} onChange={e => setNewCustomExp({ ...newCustomExp, startAge: e.target.value })} className="w-1/3 px-1 border rounded text-xs" />
+                                                <select value={newCustomExp.frequency} onChange={e => setNewCustomExp({ ...newCustomExp, frequency: e.target.value })} className="w-1/3 text-xs bg-white border rounded">
+                                                    <option value="once">單次</option>
+                                                    <option value="weekly">每週</option>
+                                                    <option value="monthly">每月</option>
+                                                    <option value="yearly">每年</option>
+                                                </select>
                                             </div>
                                         </AddItemBox>
-                                        <div className="space-y-2 mt-2">
-                                            {cars.map(c => (
-                                                <div key={c.id} className="bg-white p-2 border rounded text-xs relative">
-                                                    <div className="flex items-center gap-1 mb-1">
-                                                        <input type="text" value={c.name} onChange={e => updateCar(c.id, 'name', e.target.value)} className="font-bold border-b border-dashed border-slate-300 w-full outline-none"/>
-                                                        <button onClick={() => removeCar(c.id)} className="text-red-400 ml-1">×</button>
+
+                                        {/* 自訂支出 - 可編輯區塊 */}
+                                        <div className="space-y-2">
+                                            {customExpenses.map(p => (
+                                                <div key={p.id} className="bg-white p-2 border rounded text-xs relative shadow-sm">
+                                                    <button onClick={() => removeCustomExpense(p.id)} className="absolute top-1 right-2 text-slate-400 hover:text-red-500 text-lg">×</button>
+                                                    <div className="mb-2 pr-6">
+                                                        <label className="text-[10px] text-slate-400 block">項目名稱</label>
+                                                        <input type="text" value={p.name} onChange={e => updateCustomExpense(p.id, 'name', e.target.value)} className="w-full border-b border-slate-200 outline-none font-bold text-red-700" />
                                                     </div>
-                                                    <div className="grid grid-cols-3 gap-1">
-                                                        <div><label className="text-[10px] text-slate-400">價格</label><input type="number" step="0.01" value={c.price} onChange={e => updateCar(c.id, 'price', e.target.value)} className="w-full border rounded px-1"/></div>
-                                                        <div><label className="text-[10px] text-slate-400">購入歲</label><input type="number" value={c.buyAge} onChange={e => updateCar(c.id, 'buyAge', e.target.value)} className="w-full border rounded px-1"/></div>
-                                                        <div><label className="text-[10px] text-slate-400">貸款年</label><input type="number" value={c.loanTerm} onChange={e => updateCar(c.id, 'loanTerm', e.target.value)} className="w-full border rounded px-1"/></div>
+                                                    <div className="grid grid-cols-4 gap-2">
+                                                        <div><label className="text-[10px] text-slate-400 block">金額(萬)</label><input type="number" step="0.01" value={p.amount} onChange={e => updateCustomExpense(p.id, 'amount', e.target.value)} className="w-full border rounded px-1" /></div>
+                                                        <div>
+                                                            <label className="text-[10px] text-slate-400 block">頻率</label>
+                                                            <select value={p.frequency} onChange={e => updateCustomExpense(p.id, 'frequency', e.target.value)} className="w-full border rounded px-1">
+                                                                <option value="once">單次</option>
+                                                                <option value="weekly">每週</option>
+                                                                <option value="monthly">每月</option>
+                                                                <option value="yearly">每年</option>
+                                                            </select>
+                                                        </div>
+                                                        <div><label className="text-[10px] text-slate-400 block">開始歲</label><input type="number" value={p.startAge} onChange={e => updateCustomExpense(p.id, 'startAge', e.target.value)} className="w-full border rounded px-1" /></div>
+                                                        <div><label className="text-[10px] text-slate-400 block">結束歲</label><input type="number" value={p.endAge || p.startAge} onChange={e => updateCustomExpense(p.id, 'endAge', e.target.value)} disabled={p.frequency === 'once'} className={`w-full border rounded px-1 ${p.frequency === 'once' ? 'bg-slate-100 text-slate-300' : ''}`} /></div>
                                                     </div>
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
-                                </div>
-                            </CollapsibleSection>
+                                </CollapsibleSection>
 
-                            <CollapsibleSection title="被動收入 & 自訂" icon="💸" isOpen={openSections.custom} onToggle={() => toggleSection('custom')}>
-                                <div className="space-y-4">
-                                    <AddItemBox title="新增被動收入" onAdd={addPassiveIncome} disabled={!newPassive.name || !newPassive.amount}><div className="flex gap-2 mb-1"><IMEInput placeholder="名稱" value={newPassive.name} onChange={e => setNewPassive({...newPassive, name: e.target.value})} className="w-2/3 px-2 py-1 border rounded text-xs"/><input type="number" step="0.01" placeholder="萬" value={newPassive.amount} onChange={e => setNewPassive({...newPassive, amount: e.target.value})} className="w-1/3 px-2 py-1 border rounded text-xs"/></div><div className="flex gap-2"><input type="number" placeholder="起歲" value={newPassive.startAge} onChange={e => setNewPassive({...newPassive, startAge: e.target.value})} className="w-1/3 px-1 border rounded text-xs"/><input type="number" placeholder="迄歲" value={newPassive.endAge} onChange={e => setNewPassive({...newPassive, endAge: e.target.value})} className="w-1/3 px-1 border rounded text-xs"/><select value={newPassive.frequency} onChange={e => setNewPassive({...newPassive, frequency: e.target.value})} className="w-1/3 text-xs bg-white border rounded"><option value="monthly">月</option><option value="yearly">年</option></select></div></AddItemBox>
-                                    <div className="space-y-1">{passiveIncomes.map(p => (<div key={p.id} className="flex justify-between bg-white p-1 border rounded text-xs text-green-700"><span>{p.name} (+{p.amount})</span><button onClick={() => removePassiveIncome(p.id)} className="text-red-400">×</button></div>))}</div>
-                                    
-                                    <AddItemBox title="自訂支出" onAdd={addCustomExpense} disabled={!newCustomExp.name || !newCustomExp.amount}>
-                                        <div className="flex gap-2 mb-1">
-                                            <IMEInput placeholder="項目" value={newCustomExp.name} onChange={e => setNewCustomExp({...newCustomExp, name: e.target.value})} className="w-2/3 px-2 py-1 border rounded text-xs"/>
-                                            <input type="number" step="0.01" placeholder="萬" value={newCustomExp.amount} onChange={e => setNewCustomExp({...newCustomExp, amount: e.target.value})} className="w-1/3 px-2 py-1 border rounded text-xs"/>
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <input type="number" placeholder="起歲" value={newCustomExp.startAge} onChange={e => setNewCustomExp({...newCustomExp, startAge: e.target.value})} className="w-1/3 px-1 border rounded text-xs"/>
-                                            <select value={newCustomExp.frequency} onChange={e => setNewCustomExp({...newCustomExp, frequency: e.target.value})} className="w-1/3 text-xs bg-white border rounded">
-                                                <option value="once">單次</option>
-                                                <option value="weekly">每週</option>
-                                                <option value="monthly">每月</option>
-                                                <option value="yearly">每年</option>
-                                            </select>
-                                        </div>
-                                    </AddItemBox>
-                                    
-                                    {/* 自訂支出 - 可編輯區塊 */}
-                                    <div className="space-y-2">
-                                        {customExpenses.map(p => (
-                                            <div key={p.id} className="bg-white p-2 border rounded text-xs relative shadow-sm">
-                                                <button onClick={() => removeCustomExpense(p.id)} className="absolute top-1 right-2 text-slate-400 hover:text-red-500 text-lg">×</button>
-                                                <div className="mb-2 pr-6">
-                                                    <label className="text-[10px] text-slate-400 block">項目名稱</label>
-                                                    <input type="text" value={p.name} onChange={e => updateCustomExpense(p.id, 'name', e.target.value)} className="w-full border-b border-slate-200 outline-none font-bold text-red-700"/>
-                                                </div>
-                                                <div className="grid grid-cols-4 gap-2">
-                                                    <div><label className="text-[10px] text-slate-400 block">金額(萬)</label><input type="number" step="0.01" value={p.amount} onChange={e => updateCustomExpense(p.id, 'amount', e.target.value)} className="w-full border rounded px-1"/></div>
-                                                    <div>
-                                                        <label className="text-[10px] text-slate-400 block">頻率</label>
-                                                        <select value={p.frequency} onChange={e => updateCustomExpense(p.id, 'frequency', e.target.value)} className="w-full border rounded px-1">
-                                                            <option value="once">單次</option>
-                                                            <option value="weekly">每週</option>
-                                                            <option value="monthly">每月</option>
-                                                            <option value="yearly">每年</option>
-                                                        </select>
-                                                    </div>
-                                                    <div><label className="text-[10px] text-slate-400 block">開始歲</label><input type="number" value={p.startAge} onChange={e => updateCustomExpense(p.id, 'startAge', e.target.value)} className="w-full border rounded px-1"/></div>
-                                                    <div><label className="text-[10px] text-slate-400 block">結束歲</label><input type="number" value={p.endAge || p.startAge} onChange={e => updateCustomExpense(p.id, 'endAge', e.target.value)} disabled={p.frequency === 'once'} className={`w-full border rounded px-1 ${p.frequency==='once' ? 'bg-slate-100 text-slate-300':''}`}/></div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </CollapsibleSection>
-
+                            </div>
                         </div>
+
+                        <main className="flex-1 bg-slate-100 p-4 lg:p-6 overflow-y-auto w-full">
+                            <div className="max-w-5xl mx-auto space-y-6">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200"><div className="text-xs text-slate-400 font-bold uppercase">總收入 (含被動)</div><div className="text-lg font-bold text-slate-800">{new Intl.NumberFormat().format(Math.round(simulation.totalEarned / 10000))} 萬</div></div>
+                                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200"><div className="text-xs text-slate-400 font-bold uppercase">被動收入佔比</div><div className="text-lg font-bold text-green-600">{simulation.totalEarned > 0 ? ((simulation.totalPassive / simulation.totalEarned) * 100).toFixed(1) : 0}%</div></div>
+                                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200"><div className="text-xs text-slate-400 font-bold uppercase">最高資產</div><div className="text-lg font-bold text-blue-600">{new Intl.NumberFormat().format(Math.round(Math.max(...simulation.dataPoints)))} 萬</div></div>
+                                    <div className={`bg-white p-4 rounded-xl shadow-sm border ${simulation.bankruptAge ? 'border-red-300 bg-red-50' : 'border-slate-200'}`}><div className="text-xs text-slate-400 font-bold uppercase">破產風險</div><div className={`text-lg font-bold ${simulation.bankruptAge ? 'text-red-600' : 'text-slate-800'}`}>{simulation.bankruptAge ? `${simulation.bankruptAge} 歲` : '無'}</div></div>
+                                </div>
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                    <div className="lg:col-span-2 bg-white p-4 rounded-2xl shadow-sm border border-slate-200 h-[400px] flex flex-col"><h3 className="text-sm font-bold text-slate-600 mb-4 flex items-center gap-2"><i className="ph-bold ph-chart-line-up"></i> 資產累積 (實質購買力)</h3><div className="flex-1 relative w-full"><div className="chart-container"><FinanceChart mainSimulation={simulation} comparisonSimulations={comparisonSimulations} /></div></div></div>
+                                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 h-[400px] flex flex-col"><h3 className="text-sm font-bold text-slate-600 mb-4 flex items-center gap-2"><i className="ph-bold ph-chart-pie-slice"></i> 生涯支出 (名目)</h3><div className="flex-1 relative w-full"><div className="chart-container"><ExpensePieChart data={simulation.expenseStats} customBreakdown={simulation.customBreakdown} /></div></div></div>
+                                </div>
+                            </div>
+                        </main>
                     </div>
-
-                    <main className="flex-1 bg-slate-100 p-4 lg:p-6 overflow-y-auto w-full">
-                        <div className="max-w-5xl mx-auto space-y-6">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200"><div className="text-xs text-slate-400 font-bold uppercase">總收入 (含被動)</div><div className="text-lg font-bold text-slate-800">{new Intl.NumberFormat().format(Math.round(simulation.totalEarned/10000))} 萬</div></div>
-                                <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200"><div className="text-xs text-slate-400 font-bold uppercase">被動收入佔比</div><div className="text-lg font-bold text-green-600">{simulation.totalEarned > 0 ? ((simulation.totalPassive / simulation.totalEarned)*100).toFixed(1) : 0}%</div></div>
-                                <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200"><div className="text-xs text-slate-400 font-bold uppercase">最高資產</div><div className="text-lg font-bold text-blue-600">{new Intl.NumberFormat().format(Math.round(Math.max(...simulation.dataPoints)))} 萬</div></div>
-                                <div className={`bg-white p-4 rounded-xl shadow-sm border ${simulation.bankruptAge ? 'border-red-300 bg-red-50' : 'border-slate-200'}`}><div className="text-xs text-slate-400 font-bold uppercase">破產風險</div><div className={`text-lg font-bold ${simulation.bankruptAge ? 'text-red-600' : 'text-slate-800'}`}>{simulation.bankruptAge ? `${simulation.bankruptAge} 歲` : '無'}</div></div>
-                            </div>
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                                <div className="lg:col-span-2 bg-white p-4 rounded-2xl shadow-sm border border-slate-200 h-[400px] flex flex-col"><h3 className="text-sm font-bold text-slate-600 mb-4 flex items-center gap-2"><i className="ph-bold ph-chart-line-up"></i> 資產累積 (實質購買力)</h3><div className="flex-1 relative w-full"><div className="chart-container"><FinanceChart mainSimulation={simulation} comparisonSimulations={comparisonSimulations} /></div></div></div>
-                                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 h-[400px] flex flex-col"><h3 className="text-sm font-bold text-slate-600 mb-4 flex items-center gap-2"><i className="ph-bold ph-chart-pie-slice"></i> 生涯支出 (名目)</h3><div className="flex-1 relative w-full"><div className="chart-container"><ExpensePieChart data={simulation.expenseStats} customBreakdown={simulation.customBreakdown} /></div></div></div>
-                            </div>
-                        </div>
-                    </main>
                 </div>
-            </div>
-        );
-    };
+            );
+        };
 
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
-</script>
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
 </body>
+
 </html>
